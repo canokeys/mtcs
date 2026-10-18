@@ -40,6 +40,9 @@ jobs:
           expected = f'v{version}'
           if os.environ['GITHUB_REF_NAME'] != expected:
               raise SystemExit(f'Release tag must be {expected}')
+          changelog = Path('CHANGELOG.md').read_text()
+          if f'## {version}' not in changelog:
+              raise SystemExit(f'CHANGELOG.md has no ## {version} section')
           PY
       - name: Verify the release package
         run: |
