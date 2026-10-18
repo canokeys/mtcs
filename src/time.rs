@@ -1,7 +1,11 @@
-//! Strict RFC 5280 validity time parsing: UTCTime and GeneralizedTime in their
-//! mandatory Zulu form, seconds included. No fractional seconds, no offsets.
-//! The caller owns the interpretation of the resulting Unix timestamps; this
-//! module reads no clock.
+//! Validity time parsing for UTCTime and GeneralizedTime in their mandatory
+//! Zulu form, seconds included. No fractional seconds, no offsets.
+//!
+//! RFC 5280 §4.1.2.5 requires UTCTime for years through 2049; this parser
+//! accepts GeneralizedTime for any year, which is the interoperable choice
+//! (real deployments, including the PLANTS WG demo corpus, use it for in-range
+//! years). The caller owns the interpretation of the resulting Unix
+//! timestamps; this module reads no clock.
 
 use crate::{Error, Result};
 
