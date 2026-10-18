@@ -55,16 +55,30 @@ impl CaTrust {
         let ca_id = trust_anchor_id_from_name(subject.content)?;
         let mut signature_algorithm = None;
         let mut bounds = None;
+        let mut mtc_critical = false;
+        let mut is_ca = false;
+        let mut key_cert_sign = false;
         for extension in extensions(input)? {
-            if extension.oid == MTC_CA_SHA256_EXTENSION_OID {
-                let (algorithm, min, max) = parse_mtc_ca_extension(&extension.value)?;
-                signature_algorithm = Some(algorithm);
-                bounds = Some((min, max));
+            match extension.oid.as_str() {
+                MTC_CA_SHA256_EXTENSION_OID => {
+                    let (algorithm, min, max) = parse_mtc_ca_extension(&extension.value)?;
+                    signature_algorithm = Some(algorithm);
+                    bounds = Some((min, max));
+                    mtc_critical = extension.critical;
+                }
+                "2.5.29.19" => is_ca = basic_constraints(&extension.value)?,
+                "2.5.29.15" => key_cert_sign = key_usage_cert_sign(&extension.value)?,
+                _ => {}
             }
         }
         let signature_algorithm =
             signature_algorithm.ok_or(Error::Malformed("MTCCertificationAuthority extension"))?;
         let (min, max) = bounds.ok_or(Error::Malformed("MTCCertificationAuthority"))?;
+        // Section 5.5 of the draft: the MTC CA extension MUST be critical,
+        // basicConstraints.cA MUST be TRUE, and keyUsage MUST assert keyCertSign.
+        if !mtc_critical || !is_ca || !key_cert_sign {
+            return Err(Error::Malformed("MTC CA profile"));
+        }
         let mut trust = CaTrust::new(
             ca_id.clone(),
             CosignerInfo {
@@ -78,6 +92,39 @@ impl CaTrust {
         }
         Ok(trust)
     }
+}
+
+/// Decode basicConstraints, returning the cA flag (default false).
+fn basic_constraints(value: &[u8]) -> Result<bool> {
+    let (sequence, rest) = read_element(value).ok_or(Error::Malformed("basicConstraints"))?;
+    if sequence.tag != 0x30 || !rest.is_empty() {
+        return Err(Error::Malformed("basicConstraints"));
+    }
+    if sequence.content.is_empty() {
+        return Ok(false);
+    }
+    let (first, _) = read_element(sequence.content).ok_or(Error::Malformed("basicConstraints"))?;
+    if first.tag != 0x01 {
+        return Ok(false); // No BOOLEAN: cA defaults to false.
+    }
+    if first.content != [0xff] {
+        return Err(Error::Malformed("basicConstraints cA"));
+    }
+    Ok(true)
+}
+
+/// Decode keyUsage, returning whether keyCertSign is asserted.
+fn key_usage_cert_sign(value: &[u8]) -> Result<bool> {
+    let (bits, rest) = read_element(value).ok_or(Error::Malformed("keyUsage"))?;
+    if bits.tag != 0x03 || !rest.is_empty() {
+        return Err(Error::Malformed("keyUsage"));
+    }
+    let content = bits.content;
+    if content.is_empty() || content[0] > 7 {
+        return Err(Error::Malformed("keyUsage"));
+    }
+    // keyCertSign is bit index 5: the 0x04 mask in the first data byte.
+    Ok(content.len() >= 2 && content[1] & 0x04 != 0)
 }
 
 /// Extract the trust anchor ID from a Name with a single id-rdna-trustAnchorID
@@ -107,6 +154,7 @@ pub(crate) fn trust_anchor_id_from_name(name_content: &[u8]) -> Result<TrustAnch
 
 struct RawExtension {
     oid: String,
+    critical: bool,
     value: Vec<u8>,
 }
 
@@ -140,9 +188,14 @@ fn extensions(input: &[u8]) -> Result<Vec<RawExtension>> {
             }
             let mut tail = tail;
             // An optional BOOLEAN critical flag precedes extnValue.
+            let mut critical = false;
             let (peek, tail_after_peek) =
                 read_element(tail).ok_or(Error::Malformed("extension value"))?;
             if peek.tag == 0x01 {
+                if !matches!(peek.content, [0x00] | [0xff]) {
+                    return Err(Error::Malformed("extension critical flag"));
+                }
+                critical = peek.content == [0xff];
                 tail = tail_after_peek;
             }
             let (value, tail) = read_element(tail).ok_or(Error::Malformed("extnValue"))?;
@@ -151,6 +204,7 @@ fn extensions(input: &[u8]) -> Result<Vec<RawExtension>> {
             }
             result.push(RawExtension {
                 oid: crate::id::oid_content_to_dotted(oid.content)?,
+                critical,
                 value: value.content.to_vec(),
             });
         }
