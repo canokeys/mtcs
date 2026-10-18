@@ -3,7 +3,7 @@
 //! structure; the cosigner signature algorithm OID it carries is interpreted
 //! by the `verify` feature.
 
-use crate::der::{next_element, read_element, Element};
+use crate::der::{Element, next_element, read_element};
 use crate::{Error, Result};
 
 /// The decoded body of an id-pe-mtcCertificationAuthority-SHA256 extension.

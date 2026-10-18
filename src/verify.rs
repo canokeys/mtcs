@@ -5,11 +5,11 @@
 //! are unchanged and remain the caller's responsibility; certificate validity
 //! is checked here against the caller-supplied timestamp.
 
-use crate::der::{read_element, Element};
+use crate::der::{Element, read_element};
 use crate::entry::{certificate_elements, entry_hash_from_certificate};
 use crate::id::TrustAnchorId;
 use crate::proof::MtcProof;
-use crate::tree::{evaluate_inclusion_proof, Subtree};
+use crate::tree::{Subtree, evaluate_inclusion_proof};
 use crate::trust::TrustStore;
 use crate::{Error, Result};
 
@@ -100,10 +100,10 @@ pub fn verify_certificate(
         return Err(Error::Malformed("signature BIT STRING"));
     }
     let mut input = tbs.content;
-    if let Some((version, rest)) = read_element(input) {
-        if version.tag == 0xa0 {
-            input = rest;
-        }
+    if let Some((version, rest)) = read_element(input)
+        && version.tag == 0xa0
+    {
+        input = rest;
     }
     let serial = serial_number(crate::der::next_element(&mut input, "serial")?)?;
     check_mtc_proof_algorithm(crate::der::next_element(&mut input, "signature")?)?;
@@ -123,10 +123,10 @@ pub fn verify_certificate(
     {
         return Err(Error::Revoked);
     }
-    if let Some(now) = now {
-        if !(not_before..=not_after).contains(&now) {
-            return Err(Error::TimeInvalid);
-        }
+    if let Some(now) = now
+        && !(not_before..=not_after).contains(&now)
+    {
+        return Err(Error::TimeInvalid);
     }
     let proof = MtcProof::parse_strict(&signature_value.content[1..])?;
     let subtree = Subtree::new(proof.subtree.start, proof.subtree.end)

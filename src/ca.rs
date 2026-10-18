@@ -37,10 +37,10 @@ impl CaTrust {
         let (tbs, _, _) = crate::entry::certificate_elements(certificate_der)?;
         let mut input = tbs.content;
         // version (optional), serial, signature, issuer, validity, subject.
-        if let Some((version, rest)) = read_element(input) {
-            if version.tag == 0xa0 {
-                input = rest;
-            }
+        if let Some((version, rest)) = read_element(input)
+            && version.tag == 0xa0
+        {
+            input = rest;
         }
         let _serial = crate::der::next_element(&mut input, "serial")?;
         let _tbs_signature = crate::der::next_element(&mut input, "signature")?;

@@ -6,7 +6,7 @@
 
 use crate::der::read_element;
 use crate::id::TrustAnchorId;
-use crate::tree::{Subtree, HASH_SIZE};
+use crate::tree::{HASH_SIZE, Subtree};
 use crate::{Error, Result};
 
 /// A cosigner signature algorithm (Section 5.3.3 of the draft).

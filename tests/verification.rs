@@ -3,8 +3,8 @@
 //! The demo's own `verify` subcommand agrees with the expectations below.
 
 use mtcs::{
-    verify_certificate, CaTrust, CosignerInfo, Error, SignatureAlgorithm, TrustAnchorId,
-    TrustStore, TrustedSubtree, VerificationKind,
+    CaTrust, CosignerInfo, Error, SignatureAlgorithm, TrustAnchorId, TrustStore, TrustedSubtree,
+    VerificationKind, verify_certificate,
 };
 
 mod keys;

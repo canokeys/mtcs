@@ -63,11 +63,11 @@ pub fn entry_hash_from_certificate(
     let mut input = tbs.content;
     // Optional [0] EXPLICIT version, then the serial and signature algorithm,
     // which have no counterparts in a TBSCertificateLogEntry.
-    if let Some((version, rest)) = read_element(input) {
-        if version.tag == TAG_VERSION {
-            hash.update(version.encoded);
-            input = rest;
-        }
+    if let Some((version, rest)) = read_element(input)
+        && version.tag == TAG_VERSION
+    {
+        hash.update(version.encoded);
+        input = rest;
     }
     let serial = crate::der::next_element(&mut input, "serial number")?;
     if serial.tag != TAG_INTEGER {

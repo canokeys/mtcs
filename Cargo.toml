@@ -1,7 +1,7 @@
 [package]
 name = "mtcs"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
 description = "Offline verification of Merkle Tree Certificates (draft-ietf-plants-merkle-tree-certs)"
@@ -43,3 +43,6 @@ required-features = ["verify"]
 [[example]]
 name = "verify"
 required-features = ["verify"]
+
+[package.metadata.docs.rs]
+all-features = true

@@ -123,10 +123,10 @@ impl MtcProof {
             TrustAnchorId::from_binary(&cosignature.cosigner_id)?;
             let id = cosignature.cosigner_id.as_slice();
             let ordered = |a: &[u8], b: &[u8]| a.len() < b.len() || (a.len() == b.len() && a < b);
-            if let Some(previous) = previous {
-                if !ordered(previous, id) {
-                    return Err(Error::Malformed("cosigner order"));
-                }
+            if let Some(previous) = previous
+                && !ordered(previous, id)
+            {
+                return Err(Error::Malformed("cosigner order"));
             }
             previous = Some(id);
         }

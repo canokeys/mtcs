@@ -3,7 +3,7 @@
 //!
 //! Usage: cargo run --example verify -- ca.pem cert.pem...
 
-use mtcs::{verify_certificate, CaTrust, TrustStore, VerificationKind};
+use mtcs::{CaTrust, TrustStore, VerificationKind, verify_certificate};
 
 fn read_certificate(path: &str) -> Vec<u8> {
     let bytes = std::fs::read(path).expect("read certificate");

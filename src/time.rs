@@ -95,7 +95,7 @@ mod tests {
         assert_eq!(parse_time(0x18, b"20301231235959Z").unwrap(), 1924991999);
         assert_eq!(parse_time(0x17, b"500101000000Z").unwrap(), -631152000); // 1950
         assert_eq!(parse_time(0x17, b"491231235959Z").unwrap(), 2524607999); // 2049
-                                                                             // Leap years: 2000 is leap, 1900 and 2100 are not.
+        // Leap years: 2000 is leap, 1900 and 2100 are not.
         assert_eq!(parse_time(0x18, b"20000229000000Z").unwrap(), 951782400);
         assert!(parse_time(0x18, b"19000229000000Z").is_err());
         assert!(parse_time(0x18, b"21000229000000Z").is_err());
