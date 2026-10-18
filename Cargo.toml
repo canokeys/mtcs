@@ -1,0 +1,38 @@
+[package]
+name = "mtcs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Offline verification of Merkle Tree Certificates (draft-ietf-plants-merkle-tree-certs)"
+keywords = ["mtc", "merkle-tree", "certificates", "transparency", "post-quantum"]
+categories = ["cryptography", "parser-implementations"]
+
+[features]
+default = ["verify"]
+# Wire formats, IDs, tree math and entry hashing only; no cryptographic backends.
+# `verify` adds cosignature verification and the relying-party pipeline.
+verify = [
+    "dep:p256",
+    "dep:p384",
+    "dep:ed25519-dalek",
+    "dep:ml-dsa",
+    "dep:signature",
+]
+
+[dependencies]
+sha2 = { version = "0.10.9", default-features = false }
+thiserror = "2.0.21"
+p256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "alloc"], optional = true }
+p384 = { version = "0.14.0", default-features = false, features = ["ecdsa", "alloc"], optional = true }
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["alloc"], optional = true }
+ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc"], optional = true }
+signature = { version = "3", default-features = false, optional = true }
+
+[dev-dependencies]
+base64 = "0.23.1"
+hex = "0.4.3"
+
+[[test]]
+name = "verification"
+required-features = ["verify"]

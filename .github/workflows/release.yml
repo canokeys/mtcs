@@ -1,0 +1,54 @@
+name: Publish to crates.io
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: crates-io-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: '1.85.1'
+      - name: Cache Cargo dependencies and build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-1.85.1-release-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-1.85.1-release-cargo-
+      - name: Check tag matches package version
+        run: |
+          python3 - <<'PY'
+          import os, tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path('Cargo.toml').read_text())['package']['version']
+          expected = f'v{version}'
+          if os.environ['GITHUB_REF_NAME'] != expected:
+              raise SystemExit(f'Release tag must be {expected}')
+          PY
+      - name: Verify the release package
+        run: |
+          cargo test --locked
+          cargo test --no-default-features --locked
+          cargo package --all-features --locked
+      - name: Authenticate with crates.io trusted publishing
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1
+        id: auth
+      - run: cargo publish --all-features --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

@@ -1,0 +1,16 @@
+# Rust/C build output and local tool caches.
+/target/
+**/target/
+/.tools/
+/.venv/
+__pycache__/
+*.py[cod]
+# Machine-local configuration and editor state.
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
