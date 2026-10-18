@@ -5,9 +5,13 @@
 //! parsing the MTCProof embedded in an X.509 certificate's signature value,
 //! recomputing the log entry hash from the TBSCertificate, evaluating subtree
 //! inclusion proofs, and verifying subtree cosignatures against a local
-//! [`TrustStore`]. All inputs are supplied by the caller; the crate performs
-//! no I/O, reads no clock, and holds no global state. Only the SHA-256 tree
-//! hash profile is supported.
+//! trust store (`TrustStore`, available with the default `verify` feature).
+//! All inputs are supplied by the caller; the crate performs no I/O, reads no
+//! clock, and holds no global state. Only the SHA-256 tree hash profile is
+//! supported.
+//!
+//! The no-feature base layer provides the wire formats, trust anchor IDs,
+//! Merkle tree math, log entry hashing, and landmark and property parsing.
 //!
 //! - Standalone certificates are verified through cosignature checks
 //!   (Section 7.3 of the draft).
