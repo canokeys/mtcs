@@ -7,7 +7,9 @@ use base64::Engine as _;
 use mtcs::{Subtree, evaluate_inclusion_proof, verify_consistency_proof};
 
 fn b64(text: &str) -> Vec<u8> {
-    base64::engine::general_purpose::STANDARD.decode(text).unwrap()
+    base64::engine::general_purpose::STANDARD
+        .decode(text)
+        .unwrap()
 }
 
 fn hash(text: &str) -> [u8; 32] {
@@ -48,10 +50,8 @@ struct ConsistencyVector {
 
 #[test]
 fn large_inclusion_proof_vectors() {
-    let vectors: Vec<InclusionVector> = serde_json::from_str(include_str!(
-        "fixtures/large_inclusion_proofs.json"
-    ))
-    .unwrap();
+    let vectors: Vec<InclusionVector> =
+        serde_json::from_str(include_str!("fixtures/large_inclusion_proofs.json")).unwrap();
     assert!(vectors.len() >= 24);
     for v in &vectors {
         let (index, start, end) = (
@@ -86,10 +86,8 @@ fn large_inclusion_proof_vectors() {
 
 #[test]
 fn large_consistency_proof_vectors() {
-    let vectors: Vec<ConsistencyVector> = serde_json::from_str(include_str!(
-        "fixtures/large_consistency_proofs.json"
-    ))
-    .unwrap();
+    let vectors: Vec<ConsistencyVector> =
+        serde_json::from_str(include_str!("fixtures/large_consistency_proofs.json")).unwrap();
     assert!(vectors.len() >= 21);
     for v in &vectors {
         let (start, end, tree_size) = (
@@ -111,19 +109,31 @@ fn large_consistency_proof_vectors() {
             let mut wrong_root = root_hash;
             wrong_root[0] ^= 1;
             assert!(!verify_consistency_proof(
-                tree_size, subtree, &proof, &node_hash, &wrong_root
+                tree_size,
+                subtree,
+                &proof,
+                &node_hash,
+                &wrong_root
             ));
         }
         // A damaged proof must fail (when it can carry damage).
         if !proof.is_empty() {
             let mut broken = proof.clone();
             broken[0] ^= 1;
-            assert!(!verify_consistency_proof(tree_size, subtree, &broken, &node_hash, &root_hash));
+            assert!(!verify_consistency_proof(
+                tree_size, subtree, &broken, &node_hash, &root_hash
+            ));
         }
         // A subtree hash that does not match the tree must fail.
         let mut wrong_node = node_hash;
         wrong_node[0] ^= 1;
-        assert!(!verify_consistency_proof(tree_size, subtree, &proof, &wrong_node, &root_hash));
+        assert!(!verify_consistency_proof(
+            tree_size,
+            subtree,
+            &proof,
+            &wrong_node,
+            &root_hash
+        ));
     }
 }
 
@@ -132,7 +142,9 @@ fn consistency_proofs_reject_malformed_inputs() {
     let hash = [7u8; 32];
     let subtree = Subtree::new(0, 8).unwrap();
     // Proof not a multiple of the hash size.
-    assert!(!verify_consistency_proof(8, subtree, &[0; 33], &hash, &hash));
+    assert!(!verify_consistency_proof(
+        8, subtree, &[0; 33], &hash, &hash
+    ));
     // Tree smaller than the subtree end.
     assert!(!verify_consistency_proof(4, subtree, &[], &hash, &hash));
     // Empty subtrees only verify against the empty hash with an empty proof.
