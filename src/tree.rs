@@ -60,14 +60,12 @@ pub fn node_hash(left: &[u8; HASH_SIZE], right: &[u8; HASH_SIZE]) -> [u8; HASH_S
 }
 
 fn chunks(proof: &[u8]) -> Option<impl Iterator<Item = &[u8; HASH_SIZE]>> {
-    if proof.len() % HASH_SIZE != 0 {
+    if !proof.len().is_multiple_of(HASH_SIZE) {
         return None;
     }
-    Some(
-        proof.chunks_exact(HASH_SIZE).map(|c| {
-            <&[u8; HASH_SIZE]>::try_from(c).unwrap_or_else(|_| unreachable!("chunk size"))
-        }),
-    )
+    Some(proof.as_chunks::<HASH_SIZE>().0.iter().map(|c| {
+        <&[u8; HASH_SIZE]>::try_from(&c[..]).unwrap_or_else(|_| unreachable!("chunk size"))
+    }))
 }
 
 /// Evaluate a subtree inclusion proof (Section 4.3.2 of the draft), returning

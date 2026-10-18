@@ -165,18 +165,16 @@ pub(crate) fn verify_cosignature(
     }
 }
 
-// The ECDSA/Ed25519 crates are one RustCrypto generation older and use
-// signature v2 traits; ML-DSA uses signature v3. Keep the two scoped apart.
 fn verify_ecdsa_p256(
     key: &[u8],
     message: &[u8],
     signature: &[u8],
-) -> core::result::Result<(), signature_v2::Error> {
-    use signature_v2::Verifier as _;
+) -> core::result::Result<(), signature::Error> {
+    use signature::Verifier as _;
     let key =
-        p256::ecdsa::VerifyingKey::from_sec1_bytes(key).map_err(|_| signature_v2::Error::new())?;
+        p256::ecdsa::VerifyingKey::from_sec1_bytes(key).map_err(|_| signature::Error::new())?;
     let signature =
-        p256::ecdsa::Signature::from_der(signature).map_err(|_| signature_v2::Error::new())?;
+        p256::ecdsa::Signature::from_der(signature).map_err(|_| signature::Error::new())?;
     key.verify(message, &signature)
 }
 
@@ -184,12 +182,12 @@ fn verify_ecdsa_p384(
     key: &[u8],
     message: &[u8],
     signature: &[u8],
-) -> core::result::Result<(), signature_v2::Error> {
-    use signature_v2::Verifier as _;
+) -> core::result::Result<(), signature::Error> {
+    use signature::Verifier as _;
     let key =
-        p384::ecdsa::VerifyingKey::from_sec1_bytes(key).map_err(|_| signature_v2::Error::new())?;
+        p384::ecdsa::VerifyingKey::from_sec1_bytes(key).map_err(|_| signature::Error::new())?;
     let signature =
-        p384::ecdsa::Signature::from_der(signature).map_err(|_| signature_v2::Error::new())?;
+        p384::ecdsa::Signature::from_der(signature).map_err(|_| signature::Error::new())?;
     key.verify(message, &signature)
 }
 
@@ -197,17 +195,16 @@ fn verify_ed25519(
     key: &[u8],
     message: &[u8],
     signature: &[u8],
-) -> core::result::Result<(), signature_v2::Error> {
-    use signature_v2::Verifier as _;
-    let key_bytes: &[u8; 32] = key.try_into().map_err(|_| signature_v2::Error::new())?;
-    let key = ed25519_dalek::VerifyingKey::from_bytes(key_bytes)
-        .map_err(|_| signature_v2::Error::new())?;
+) -> core::result::Result<(), signature::Error> {
+    use signature::Verifier as _;
+    let key_bytes: &[u8; 32] = key.try_into().map_err(|_| signature::Error::new())?;
+    let key =
+        ed25519_dalek::VerifyingKey::from_bytes(key_bytes).map_err(|_| signature::Error::new())?;
     let signature =
-        ed25519_dalek::Signature::from_slice(signature).map_err(|_| signature_v2::Error::new())?;
+        ed25519_dalek::Signature::from_slice(signature).map_err(|_| signature::Error::new())?;
     key.verify(message, &signature)
 }
 
-// ML-DSA (FIPS 204) is the current-generation RustCrypto crate, on signature v3.
 fn verify_ml_dsa<P: ml_dsa::MlDsaParams>(
     key: &[u8],
     message: &[u8],

@@ -15,7 +15,7 @@
   proofs must be exercised against the PLANTS WG demo corpus; verdicts in
   tests/verification.rs must match the demo's own verifier.
 - Reuse maintained cryptography libraries (RustCrypto) for signature verification.
-  Keep the base layer free of cryptographic backends. Preserve Rust 1.85
+  Keep the base layer free of cryptographic backends. Preserve Rust 1.88
   compatibility and the default/no-default feature boundaries; dependency upgrades
   must remain compatible with the MSRV unless a deliberate MSRV increase is
   documented in the release notes.

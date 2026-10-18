@@ -8,4 +8,4 @@
   landmark documents, certificate property lists), Merkle subtree math and log
   entry hashing. The default `verify` feature adds cosignature verification
   (ECDSA P-256/P-384, Ed25519, ML-DSA-44/65/87) and the relying-party
-  verification pipeline.
+  verification pipeline. Requires Rust 1.88 (the current RustCrypto generation).
