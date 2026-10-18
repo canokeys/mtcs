@@ -42,6 +42,10 @@ jobs:
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - if: matrix.toolchain == 'stable'
         run: cargo clippy --all-targets --no-default-features --locked -- -D warnings
+      - if: matrix.toolchain == 'stable'
+        run: cargo run --example inspect_proof --no-default-features --locked -- tests/fixtures/standalone.der
+      - if: matrix.toolchain == 'stable'
+        run: cargo run --example verify --locked -- tests/fixtures/ca.der tests/fixtures/standalone.der
       - if: matrix.os == 'ubuntu-latest' && matrix.toolchain == 'stable'
         run: cargo fmt --all --check
       - if: matrix.os == 'ubuntu-latest' && matrix.toolchain == 'stable'

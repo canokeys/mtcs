@@ -138,6 +138,18 @@ impl MtcProof {
     pub(crate) fn entry_extensions_encoded(&self) -> &[u8] {
         &self.entry_extensions_encoded
     }
+
+    /// Parse the MTCProof carried in a certificate's signatureValue BIT STRING.
+    /// The certificate's signature algorithms are not checked here; callers
+    /// deciding whether a certificate is an MTC should check for
+    /// id-alg-mtcProof themselves (the verification pipeline does).
+    pub fn from_certificate(certificate_der: &[u8]) -> Result<MtcProof> {
+        let (_, _, signature) = crate::entry::certificate_elements(certificate_der)?;
+        if signature.tag != 0x03 || signature.content.is_empty() || signature.content[0] != 0 {
+            return Err(Error::Malformed("signature BIT STRING"));
+        }
+        Self::parse(&signature.content[1..])
+    }
 }
 
 #[cfg(test)]

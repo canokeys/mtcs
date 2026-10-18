@@ -48,6 +48,15 @@ let verification = verify_certificate(&store, &certificate_der, Some(now_unix))?
 See the rustdoc for `TrustStore`/`CaTrust` to configure required cosigner
 quorums, revoked serial ranges and trusted subtrees.
 
+## Examples
+
+```sh
+# Inspect the MTCProof in a certificate (base layer, no cryptography).
+cargo run --no-default-features --example inspect_proof -- tests/fixtures/standalone.der
+# Verify certificates against a CA certificate.
+cargo run --example verify -- tests/fixtures/ca.der tests/fixtures/standalone.der
+```
+
 ## Testing
 
 Unit tests cover the wire formats and tree algorithms. The integration suite

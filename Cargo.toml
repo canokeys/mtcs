@@ -18,16 +18,23 @@ verify = [
     "dep:ed25519-dalek",
     "dep:ml-dsa",
     "dep:signature",
+    "dep:signature-v2",
 ]
 
+# The verify stack uses the Rust 1.85-compatible RustCrypto generations:
+# ECDSA/Ed25519 are the signature-v2 crates (p256/p384 0.13, ed25519-dalek 2.2),
+# ML-DSA is on signature v3, and Cargo.lock pins ctutils to 0.4.0 (0.4.3
+# declares rustc 1.87). Do not upgrade these without checking MSRV CI.
 [dependencies]
 sha2 = { version = "0.10.9", default-features = false }
 thiserror = "2.0.21"
-p256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "alloc"], optional = true }
-p384 = { version = "0.14.0", default-features = false, features = ["ecdsa", "alloc"], optional = true }
-ed25519-dalek = { version = "3.0.0", default-features = false, features = ["alloc"], optional = true }
+p256 = { version = "0.13.2", default-features = false, features = ["ecdsa", "alloc"], optional = true }
+p384 = { version = "0.13.1", default-features = false, features = ["ecdsa", "alloc"], optional = true }
+ed25519-dalek = { version = "2.2.0", default-features = false, features = ["alloc"], optional = true }
 ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc"], optional = true }
 signature = { version = "3", default-features = false, optional = true }
+# The ECDSA/Ed25519 crates are one generation older and use signature v2.
+signature-v2 = { package = "signature", version = "2.2", default-features = false, optional = true }
 
 [dev-dependencies]
 base64 = "0.23.1"
@@ -35,4 +42,8 @@ hex = "0.4.3"
 
 [[test]]
 name = "verification"
+required-features = ["verify"]
+
+[[example]]
+name = "verify"
 required-features = ["verify"]
