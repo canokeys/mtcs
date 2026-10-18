@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
 description = "Offline verification of Merkle Tree Certificates (draft-ietf-plants-merkle-tree-certs)"
+homepage = "https://github.com/canokeys/mtcs"
+repository = "https://github.com/canokeys/mtcs"
+documentation = "https://docs.rs/mtcs"
 keywords = ["mtc", "merkle-tree", "certificates", "transparency", "post-quantum"]
 categories = ["cryptography", "parser-implementations"]
 
