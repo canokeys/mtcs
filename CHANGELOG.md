@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## 0.1.1
+
+- Added coverage for the draft's machine-readable large-subtree test vectors
+  (inclusion and consistency proofs); no API changes.
+- Fixed a broken intra-doc link in base-layer documentation builds.
+- The release workflow now requires a CHANGELOG section matching the tag.
+
 ## 0.1.0
 
 - Initial release: offline verification of Merkle Tree Certificates
