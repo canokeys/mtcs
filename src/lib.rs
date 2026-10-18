@@ -57,9 +57,11 @@ pub use tree::{
     node_hash, verify_consistency_proof,
 };
 #[cfg(feature = "verify")]
-pub use trust::{CaTrust, CosignerInfo, TrustStore, TrustedSubtree};
+pub use trust::{CaTrust, CosignerGroup, CosignerInfo, TrustStore, TrustedSubtree};
 #[cfg(feature = "verify")]
-pub use verify::{Verification, VerificationKind, verify_certificate};
+pub use verify::{
+    Verification, VerificationKind, verify_certificate, verify_certificate_ignoring_validity,
+};
 
 /// Errors produced by MTC parsing and verification.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -86,9 +88,17 @@ pub enum Error {
     /// Subtree inclusion proof evaluation failed.
     #[error("inclusion proof evaluation failed")]
     ProofEvaluation,
-    /// The subtree hash matched no trusted subtree and cosignatures were insufficient.
-    #[error("cosigner policy not satisfied")]
-    PolicyUnsatisfied,
+    /// The subtree hash matched no trusted subtree and cosignatures were
+    /// insufficient. `missing` lists required cosigners absent from the
+    /// MTCProof; `invalid` lists recognized cosigners whose cosignature was
+    /// present but failed verification.
+    #[error("cosigner policy not satisfied (missing: {missing:?}, invalid: {invalid:?})")]
+    PolicyUnsatisfied {
+        /// Required cosigners with no cosignature in the MTCProof.
+        missing: Vec<TrustAnchorId>,
+        /// Recognized cosigners whose cosignature failed verification.
+        invalid: Vec<TrustAnchorId>,
+    },
     /// A cosignature was cryptographically invalid.
     #[error("invalid cosignature from cosigner {0}")]
     InvalidCosignature(TrustAnchorId),

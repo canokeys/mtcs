@@ -38,7 +38,7 @@ fn main() {
     let mut failed = false;
     for path in args {
         let der = read_certificate(&path);
-        match verify_certificate(&store, &der, Some(now)) {
+        match verify_certificate(&store, &der, now) {
             Ok(verification) => {
                 let kind = match verification.kind {
                     VerificationKind::Standalone => "standalone",

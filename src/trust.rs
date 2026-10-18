@@ -1,9 +1,9 @@
 //! Relying-party configuration: trusted cosigners, CAs, subtrees and revoked
 //! serial ranges (Sections 7.1 through 7.5 of the draft).
 
-use crate::SignatureAlgorithm;
 use crate::id::TrustAnchorId;
 use crate::tree::HASH_SIZE;
+use crate::{Error, Result, SignatureAlgorithm};
 
 /// A cosigner's public key and signature algorithm, keyed by its cosigner ID.
 /// The algorithm is identified explicitly (Section 5.3.3 of the draft), not
@@ -16,6 +16,40 @@ pub struct CosignerInfo {
     pub algorithm: SignatureAlgorithm,
     /// The cosigner public key as a DER-encoded SubjectPublicKeyInfo.
     pub spki_der: Vec<u8>,
+}
+
+/// A group of cosigners with a satisfaction threshold: a certificate satisfies
+/// the group when at least `threshold` distinct members carry a cosignature
+/// that verifies (Section 7.3 of the draft: "a quorum of signatures from
+/// additional cosigners"). A CA collecting cosignatures from a redundant set
+/// (Section 6.3) may then legitimately present different subsets over time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CosignerGroup {
+    /// Members whose cosignatures count toward the threshold.
+    pub members: Vec<CosignerInfo>,
+    /// Minimum number of distinct members whose cosignature must verify.
+    pub threshold: usize,
+}
+
+impl CosignerGroup {
+    /// A group of `members` requiring `threshold` verified cosignatures.
+    ///
+    /// # Errors
+    /// Returns an error if `threshold` is zero or exceeds the member count.
+    pub fn new(members: Vec<CosignerInfo>, threshold: usize) -> Result<Self> {
+        if threshold == 0 || threshold > members.len() {
+            return Err(Error::Malformed("cosigner group threshold"));
+        }
+        Ok(Self { members, threshold })
+    }
+
+    /// A group satisfied by one specific cosigner.
+    pub fn single(member: CosignerInfo) -> Self {
+        Self {
+            members: vec![member],
+            threshold: 1,
+        }
+    }
 }
 
 /// A predistributed trusted subtree for landmark-relative certificates
@@ -40,9 +74,9 @@ pub struct CaTrust {
     pub ca_id: TrustAnchorId,
     /// The CA cosigner; its ID equals the CA ID (Section 5.4 of the draft).
     pub ca_cosigner: CosignerInfo,
-    /// Additional cosigners whose signatures are required on this CA's
-    /// standalone certificates. Transparency policies go here.
-    pub required_cosigners: Vec<CosignerInfo>,
+    /// Cosigner groups that must all be satisfied on this CA's standalone
+    /// certificates: an AND of k-of-n groups. Transparency policies go here.
+    pub required_groups: Vec<CosignerGroup>,
     /// Revoked serial number ranges, inclusive on both ends (Section 7.5).
     pub revoked_ranges: Vec<core::ops::RangeInclusive<u64>>,
     /// Predistributed trusted subtrees for landmark-relative certificates.
@@ -55,15 +89,21 @@ impl CaTrust {
         Self {
             ca_id,
             ca_cosigner,
-            required_cosigners: Vec::new(),
+            required_groups: Vec::new(),
             revoked_ranges: Vec::new(),
             trusted_subtrees: Vec::new(),
         }
     }
 
-    /// Require an additional cosignature on this CA's standalone certificates.
+    /// Require one specific additional cosigner on this CA's standalone
+    /// certificates (sugar for a single-member group).
     pub fn require_cosigner(&mut self, cosigner: CosignerInfo) {
-        self.required_cosigners.push(cosigner);
+        self.required_groups.push(CosignerGroup::single(cosigner));
+    }
+
+    /// Require a quorum of cosignatures from a group (Section 7.3).
+    pub fn require_group(&mut self, group: CosignerGroup) {
+        self.required_groups.push(group);
     }
 
     /// Revoke an inclusive range of serial numbers (Section 7.5 of the draft).
@@ -80,7 +120,10 @@ impl CaTrust {
         if self.ca_cosigner.id == *id {
             return Some(&self.ca_cosigner);
         }
-        self.required_cosigners.iter().find(|c| c.id == *id)
+        self.required_groups
+            .iter()
+            .flat_map(|group| group.members.iter())
+            .find(|c| c.id == *id)
     }
 }
 
@@ -90,10 +133,10 @@ impl CaTrust {
 pub struct TrustStore {
     /// Configured Merkle Tree CAs.
     pub cas: Vec<CaTrust>,
-    /// Cosigners required on every accepted standalone certificate, across CAs
-    /// (Section 7.3: "Relying parties MAY accept the same set of additional
-    /// cosigners across CAs").
-    pub required_for_all: Vec<CosignerInfo>,
+    /// Cosigner groups required on every accepted standalone certificate,
+    /// across CAs (Section 7.3: "Relying parties MAY accept the same set of
+    /// additional cosigners across CAs").
+    pub required_for_all: Vec<CosignerGroup>,
 }
 
 impl TrustStore {
@@ -105,6 +148,11 @@ impl TrustStore {
     /// Add a CA to the trust store.
     pub fn add_ca(&mut self, ca: CaTrust) {
         self.cas.push(ca);
+    }
+
+    /// Require a cosigner quorum on every accepted standalone certificate.
+    pub fn require_group_for_all(&mut self, group: CosignerGroup) {
+        self.required_for_all.push(group);
     }
 
     /// Look up a CA by its trust anchor ID.

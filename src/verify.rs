@@ -4,13 +4,21 @@
 //! validation. Hostname checks, name constraints and other X.509 mechanisms
 //! are unchanged and remain the caller's responsibility; certificate validity
 //! is checked here against the caller-supplied timestamp.
+//!
+//! Following Section 7.3, a valid CA cosignature is mandatory (authenticity),
+//! and additional configured cosigner groups must each meet their threshold
+//! (transparency). Unlike other cosigners, a *present but invalid* signature
+//! from the CA cosigner is fatal ([`Error::InvalidCosignature`]) rather than
+//! merely unsatisfying: the draft does not mandate this, but a certificate
+//! carrying a forged-looking CA cosignature is anomalous enough to report
+//! separately from a quorum shortfall.
 
 use crate::der::{Element, read_element};
 use crate::entry::{certificate_elements, entry_hash_from_certificate};
 use crate::id::TrustAnchorId;
 use crate::proof::MtcProof;
-use crate::tree::{Subtree, evaluate_inclusion_proof};
-use crate::trust::TrustStore;
+use crate::tree::{HASH_SIZE, Subtree, evaluate_inclusion_proof};
+use crate::trust::{CosignerGroup, TrustStore};
 use crate::{Error, Result};
 
 const MTC_PROOF_OID: &str = "1.3.6.1.5.5.7.6.67";
@@ -27,6 +35,7 @@ pub enum VerificationKind {
 
 /// A successful certificate verification.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Verification {
     /// Which mechanism authenticated the certificate.
     pub kind: VerificationKind,
@@ -36,6 +45,13 @@ pub struct Verification {
     pub log_number: u16,
     /// The entry index within the log (from the serial number).
     pub entry_index: u64,
+    /// The subtree the entry was proven against.
+    pub subtree: Subtree,
+    /// The subtree hash computed by inclusion-proof evaluation. For
+    /// landmark-relative verifications it equals the matched trusted subtree's
+    /// hash. Tie it to a checkpoint with [`verify_consistency_proof`](crate::verify_consistency_proof)
+    /// if needed.
+    pub subtree_hash: [u8; HASH_SIZE],
     /// Cosigner IDs whose subtree signatures verified; empty for
     /// landmark-relative verifications.
     pub satisfied_cosigners: Vec<TrustAnchorId>,
@@ -80,13 +96,33 @@ fn validity_unix(validity: Element<'_>) -> Result<(i64, i64)> {
     Ok((parse(not_before)?, parse(not_after)?))
 }
 
-/// Verify one Merkle Tree certificate against the local trust configuration.
+/// Verify one Merkle Tree certificate against the local trust configuration,
+/// checking its validity period against `now`, the caller's timestamp in
+/// seconds since the Unix epoch. Section 7.2 of the draft requires relying
+/// parties to keep performing the other X.509 checks, such as expiry.
 ///
-/// `now` is the caller's timestamp in seconds since the Unix epoch; supply
-/// None to skip the validity-period check. Every other input (trust anchors,
-/// cosigner keys, trusted subtrees, revoked ranges) comes from `store`, so
-/// verification is fully offline.
+/// Verification is fully offline: every other input (trust anchors, cosigner
+/// keys, trusted subtrees, revoked ranges) comes from `store`.
 pub fn verify_certificate(
+    store: &TrustStore,
+    certificate_der: &[u8],
+    now: i64,
+) -> Result<Verification> {
+    verify_with(store, certificate_der, Some(now))
+}
+
+/// Verify one Merkle Tree certificate without checking its validity period.
+/// This exists for offline audit and monitoring use; it is not suitable for
+/// authenticating a live peer, since expired certificates are accepted without
+/// any diagnostic.
+pub fn verify_certificate_ignoring_validity(
+    store: &TrustStore,
+    certificate_der: &[u8],
+) -> Result<Verification> {
+    verify_with(store, certificate_der, None)
+}
+
+fn verify_with(
     store: &TrustStore,
     certificate_der: &[u8],
     now: Option<i64>,
@@ -134,8 +170,7 @@ pub fn verify_certificate(
     if !subtree.contains(entry_index) {
         return Err(Error::ProofEvaluation);
     }
-    let entry_hash =
-        entry_hash_from_certificate(certificate_der, proof.entry_extensions_encoded())?;
+    let entry_hash = entry_hash_from_certificate(certificate_der, proof.entry_extensions_bytes())?;
     let expected_subtree_hash =
         evaluate_inclusion_proof(&proof.inclusion_proof, entry_index, &entry_hash, subtree)
             .ok_or(Error::ProofEvaluation)?;
@@ -152,6 +187,8 @@ pub fn verify_certificate(
                 ca_id,
                 log_number,
                 entry_index,
+                subtree,
+                subtree_hash: expected_subtree_hash,
                 satisfied_cosigners: Vec::new(),
             })
         } else {
@@ -159,17 +196,22 @@ pub fn verify_certificate(
         };
     }
     let log_id = ca.ca_id.log_id(log_number);
-    let mut satisfied = Vec::new();
+    let mut satisfied: Vec<TrustAnchorId> = Vec::new();
+    let mut invalid: Vec<TrustAnchorId> = Vec::new();
     for cosignature in &proof.cosignatures {
         // parse_strict has already validated the ID; the conversion is free.
         let cosigner_id = TrustAnchorId::from_binary(&cosignature.cosigner_id)
             .map_err(|_| Error::Malformed("cosigner ID"))?;
-        let info = ca
-            .cosigner(&cosigner_id)
-            .or_else(|| store.required_for_all.iter().find(|c| c.id == cosigner_id));
+        let info = ca.cosigner(&cosigner_id).or_else(|| {
+            store
+                .required_for_all
+                .iter()
+                .flat_map(|group| group.members.iter())
+                .find(|c| c.id == cosigner_id)
+        });
         // Unrecognized cosigners MUST be ignored (Section 7.2 of the draft).
         let Some(info) = info else { continue };
-        if crate::cosign::verify_cosignature(
+        match crate::cosign::verify_cosignature(
             &info.id,
             &log_id,
             info.algorithm,
@@ -177,27 +219,63 @@ pub fn verify_certificate(
             subtree,
             &expected_subtree_hash,
             &cosignature.signature,
-        )
-        .is_ok()
-        {
-            satisfied.push(cosigner_id);
-        } else if cosigner_id == ca.ca_cosigner.id {
-            // The CA cosigner's signature is mandatory; its failure is fatal.
-            return Err(Error::InvalidCosignature(ca.ca_cosigner.id.clone()));
+        ) {
+            Ok(()) => satisfied.push(cosigner_id),
+            // A misconfigured key is a trust-store problem, not the
+            // certificate's; propagate it unchanged.
+            Err(error @ Error::UnsupportedKey(_)) => return Err(error),
+            Err(_) => {
+                invalid.push(cosigner_id.clone());
+                if cosigner_id == ca.ca_cosigner.id {
+                    // The CA cosigner's signature is mandatory; its failure
+                    // is fatal (see the module documentation).
+                    return Err(Error::InvalidCosignature(ca.ca_cosigner.id.clone()));
+                }
+            }
         }
     }
-    let mut required = core::iter::once(&ca.ca_cosigner.id)
-        .chain(ca.required_cosigners.iter().map(|c| &c.id))
-        .chain(store.required_for_all.iter().map(|c| &c.id));
-    if required.all(|id| satisfied.contains(id)) {
+    let mut missing: Vec<TrustAnchorId> = Vec::new();
+    let mut note_missing = |id: &TrustAnchorId| {
+        if !satisfied.contains(id) && !invalid.contains(id) && !missing.contains(id) {
+            missing.push(id.clone());
+        }
+    };
+    // The CA cosigner must always verify (authenticity, Section 7.3).
+    let mut satisfied_policy = satisfied.contains(&ca.ca_cosigner.id);
+    if !satisfied_policy {
+        note_missing(&ca.ca_cosigner.id.clone());
+    }
+    let group_ok = |group: &CosignerGroup| {
+        group
+            .members
+            .iter()
+            .filter(|member| satisfied.contains(&member.id))
+            .count()
+            >= group.threshold
+    };
+    for group in ca
+        .required_groups
+        .iter()
+        .chain(store.required_for_all.iter())
+    {
+        if !group_ok(group) {
+            satisfied_policy = false;
+            for member in &group.members {
+                note_missing(&member.id);
+            }
+        }
+    }
+    if satisfied_policy {
         Ok(Verification {
             kind: VerificationKind::Standalone,
             ca_id,
             log_number,
             entry_index,
+            subtree,
+            subtree_hash: expected_subtree_hash,
             satisfied_cosigners: satisfied,
         })
     } else {
-        Err(Error::PolicyUnsatisfied)
+        Err(Error::PolicyUnsatisfied { missing, invalid })
     }
 }
