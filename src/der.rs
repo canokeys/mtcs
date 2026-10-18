@@ -29,11 +29,14 @@ pub(crate) fn read_element(input: &[u8]) -> Option<(Element<'_>, &[u8])> {
         if count == 0 || count > 8 || rest.len() < count {
             return None;
         }
+        // DER forbids non-minimal length encodings, including a leading zero.
+        if rest[0] == 0 {
+            return None;
+        }
         let mut length = 0usize;
         for &byte in &rest[..count] {
             length = length.checked_mul(256)?.checked_add(usize::from(byte))?;
         }
-        // DER forbids non-minimal length encodings.
         if length < 128 {
             return None;
         }
@@ -85,6 +88,9 @@ mod tests {
         assert!(read_element(&[0x02]).is_none());
         assert!(read_element(&[0x02, 0x80, 0, 0]).is_none()); // Indefinite length.
         assert!(read_element(&[0x02, 0x81, 42]).is_none()); // Non-minimal length.
+        let mut leading_zero = vec![0x02, 0x82, 0, 0x80];
+        leading_zero.extend([7u8; 128]);
+        assert!(read_element(&leading_zero).is_none()); // Leading zero length octet.
         assert!(read_element(&[0x02, 0x01]).is_none()); // Truncated content.
     }
 }
