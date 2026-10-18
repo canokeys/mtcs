@@ -46,6 +46,21 @@ pub(crate) fn certificate_elements<'a>(
 /// This implements the single-pass procedure of Section 7.2 of the draft:
 /// `MTH({entry}) = SHA-256(0x00 || MTCLogEntry)` where the entry carries the
 /// TBSCertificateLogEntry content octets.
+///
+/// ```
+/// # fn main() -> mtcs::Result<()> {
+/// let der = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/standalone.der"));
+/// let proof = mtcs::MtcProof::from_certificate(der)?;
+/// let hash = mtcs::entry_hash_from_certificate(der, proof.entry_extensions_bytes())?;
+/// let expected: [u8; 32] = [
+///     0xe7, 0x3f, 0x27, 0x5e, 0x42, 0x43, 0x7c, 0xa5, 0x5d, 0x1f, 0x83, 0x1f, 0x96, 0x79,
+///     0x93, 0xa1, 0x4a, 0x3f, 0x71, 0xf1, 0x19, 0x4e, 0xbb, 0x7a, 0x6d, 0xde, 0xbe, 0x33,
+///     0x47, 0x7c, 0x8a, 0xd0,
+/// ];
+/// assert_eq!(hash, expected); // plants-07 demo corpus, entry 10 of log 1
+/// # Ok(())
+/// # }
+/// ```
 pub fn entry_hash_from_certificate(
     certificate_der: &[u8],
     entry_extensions: &[u8],

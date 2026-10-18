@@ -21,9 +21,9 @@ pub struct Cosignature {
 /// A parsed MTCProof structure from a certificate's signature value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MtcProof {
-    /// The encoded entry extensions vector, including its two-byte length
-    /// prefix; retained verbatim for entry hashing.
-    pub(crate) entry_extensions_encoded: Vec<u8>,
+    /// The contents of the `extensions<0..2^16-1>` vector, without its
+    /// two-byte length prefix; retained verbatim for entry hashing.
+    entry_extensions_encoded: Vec<u8>,
     /// Decoded (extension_type, extension_data) pairs in encoded order.
     pub entry_extensions: Vec<(u16, Vec<u8>)>,
     /// The subtree the inclusion proof targets.
@@ -133,9 +133,10 @@ impl MtcProof {
         Ok(proof)
     }
 
-    /// The encoded `extensions<0..2^16-1>` vector, with its length prefix.
-    #[cfg(feature = "verify")]
-    pub(crate) fn entry_extensions_encoded(&self) -> &[u8] {
+    /// The contents of the `extensions<0..2^16-1>` vector, without the length
+    /// prefix, as [`entry_hash_from_certificate`](crate::entry_hash_from_certificate)
+    /// expects.
+    pub fn entry_extensions_bytes(&self) -> &[u8] {
         &self.entry_extensions_encoded
     }
 
