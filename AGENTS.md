@@ -35,5 +35,6 @@
   directory in place, so always copy seeds to a scratch directory first;
   fuzz/.gitignore additionally rejects extensionless grown-corpus files under
   seeds/. Run a smoke pass before releases; per-commit CI runs one minute per
-  target.
+  target, and a scheduled weekly job runs thirty minutes per target with the
+  corpus persisted across runs.
 - Keep the package licensed under Apache-2.0. README owns usage and release setup.
