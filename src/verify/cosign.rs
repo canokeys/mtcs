@@ -4,9 +4,9 @@
 //! timestamp is zero (Section 6.2). Signature algorithms are identified by
 //! the cosigner's configured public key, following Section 5.3.3.
 
-use crate::der::read_element;
-use crate::id::TrustAnchorId;
-use crate::tree::{HASH_SIZE, Subtree};
+use crate::base::der::read_element;
+use crate::base::id::TrustAnchorId;
+use crate::base::tree::{HASH_SIZE, Subtree};
 use crate::{Error, Result};
 
 /// A cosigner signature algorithm (Section 5.3.3 of the draft).
@@ -96,7 +96,7 @@ fn spki_key_bytes(algorithm: SignatureAlgorithm, spki_der: &[u8]) -> Result<&[u8
     if algorithm_oid.tag != 0x06 {
         return Err(Error::UnsupportedKey("SPKI algorithm OID"));
     }
-    let dotted = crate::id::oid_content_to_dotted(algorithm_oid.content)?;
+    let dotted = crate::base::id::oid_content_to_dotted(algorithm_oid.content)?;
     let expected = match algorithm {
         SignatureAlgorithm::EcdsaP256Sha256 => "1.2.840.10045.2.1",
         SignatureAlgorithm::EcdsaP384Sha384 => "1.2.840.10045.2.1",
@@ -113,7 +113,7 @@ fn spki_key_bytes(algorithm: SignatureAlgorithm, spki_der: &[u8]) -> Result<&[u8
         if curve.tag != 0x06 {
             return Err(Error::UnsupportedKey("curve OID"));
         }
-        let curve = crate::id::oid_content_to_dotted(curve.content)?;
+        let curve = crate::base::id::oid_content_to_dotted(curve.content)?;
         let expected_curve = match algorithm {
             SignatureAlgorithm::EcdsaP256Sha256 => "1.2.840.10045.3.1.7",
             SignatureAlgorithm::EcdsaP384Sha384 => "1.3.132.0.34",

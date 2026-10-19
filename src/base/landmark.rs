@@ -4,8 +4,8 @@
 //! obtaining the document and validating the corresponding subtree hashes
 //! against cosigned checkpoints is the relying party's update-channel concern.
 
-use crate::tree::Subtree;
-use crate::tree::covering_subtrees;
+use crate::base::tree::Subtree;
+use crate::base::tree::covering_subtrees;
 use crate::{Error, Result};
 
 /// One entry of a CA's landmark sequence (Section 6.4.1 of the draft).

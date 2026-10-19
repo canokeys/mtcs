@@ -1,9 +1,9 @@
 //! Parsing the X.509 representation of a Merkle Tree CA (Section 5.5 of the
 //! draft) into relying-party configuration.
 
-use crate::der::read_element;
-use crate::id::TrustAnchorId;
-use crate::trust::{CaTrust, CosignerInfo};
+use crate::base::der::read_element;
+use crate::base::id::TrustAnchorId;
+use crate::verify::trust::{CaTrust, CosignerInfo};
 use crate::{Error, Result, SignatureAlgorithm};
 
 const MTC_CA_SHA256_EXTENSION_OID: &str = "1.3.6.1.5.5.7.1.38";
@@ -34,7 +34,7 @@ impl CaTrust {
     /// MTCCertificationAuthority extension; no trusted subtrees or additional
     /// required cosigners are populated.
     pub fn from_ca_certificate(certificate_der: &[u8]) -> Result<Self> {
-        let (tbs, _, _) = crate::entry::certificate_elements(certificate_der)?;
+        let (tbs, _, _) = crate::base::entry::certificate_elements(certificate_der)?;
         let mut input = tbs.content;
         // version (optional), serial, signature, issuer, validity, subject.
         if let Some((version, rest)) = read_element(input)
@@ -42,12 +42,12 @@ impl CaTrust {
         {
             input = rest;
         }
-        let _serial = crate::der::next_element(&mut input, "serial")?;
-        let _tbs_signature = crate::der::next_element(&mut input, "signature")?;
-        let _issuer = crate::der::next_element(&mut input, "issuer")?;
-        let _validity = crate::der::next_element(&mut input, "validity")?;
-        let subject = crate::der::next_element(&mut input, "subject")?;
-        let spki = crate::der::next_element(&mut input, "subjectPublicKeyInfo")?;
+        let _serial = crate::base::der::next_element(&mut input, "serial")?;
+        let _tbs_signature = crate::base::der::next_element(&mut input, "signature")?;
+        let _issuer = crate::base::der::next_element(&mut input, "issuer")?;
+        let _validity = crate::base::der::next_element(&mut input, "validity")?;
+        let subject = crate::base::der::next_element(&mut input, "subject")?;
+        let spki = crate::base::der::next_element(&mut input, "subjectPublicKeyInfo")?;
         if spki.tag != 0x30 {
             return Err(Error::Malformed("subjectPublicKeyInfo"));
         }
@@ -141,7 +141,7 @@ pub(crate) fn trust_anchor_id_from_name(name_content: &[u8]) -> Result<TrustAnch
     }
     let (oid, rest) = read_element(attribute.content).ok_or(Error::Malformed("attribute OID"))?;
     if oid.tag != 0x06
-        || crate::id::oid_content_to_dotted(oid.content)? != TRUST_ANCHOR_ID_ATTRIBUTE_OID
+        || crate::base::id::oid_content_to_dotted(oid.content)? != TRUST_ANCHOR_ID_ATTRIBUTE_OID
     {
         return Err(Error::Malformed("attribute OID"));
     }
@@ -203,7 +203,7 @@ fn extensions(input: &[u8]) -> Result<Vec<RawExtension>> {
                 return Err(Error::Malformed("extnValue"));
             }
             result.push(RawExtension {
-                oid: crate::id::oid_content_to_dotted(oid.content)?,
+                oid: crate::base::id::oid_content_to_dotted(oid.content)?,
                 critical,
                 value: value.content.to_vec(),
             });
@@ -215,7 +215,7 @@ fn extensions(input: &[u8]) -> Result<Vec<RawExtension>> {
 /// Parse the MTCCertificationAuthority extension body, mapping the signature
 /// algorithm OID to a cosigner signature algorithm.
 fn parse_mtc_ca_extension(bytes: &[u8]) -> Result<(SignatureAlgorithm, u64, u64)> {
-    let parameters = crate::caext::parse_mtc_ca_parameters(bytes)?;
+    let parameters = crate::base::caext::parse_mtc_ca_parameters(bytes)?;
     let algorithm = SignatureAlgorithm::from_algorithm_oid(&parameters.signature_algorithm_oid)
         .ok_or(Error::UnsupportedKey("MTCCA signature algorithm"))?;
     Ok((algorithm, parameters.min_serial, parameters.max_serial))

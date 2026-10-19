@@ -4,9 +4,9 @@
 //! additionally enforces the draft's canonical cosigner ordering, which verifiers
 //! MUST apply; inspectors may use the lenient form to retain unusual encodings.
 
-use crate::id::TrustAnchorId;
-use crate::reader::Reader;
-use crate::tree::Subtree;
+use crate::base::id::TrustAnchorId;
+use crate::base::reader::Reader;
+use crate::base::tree::Subtree;
 use crate::{Error, Result};
 
 /// One subtree cosignature.
@@ -145,7 +145,7 @@ impl MtcProof {
     /// deciding whether a certificate is an MTC should check for
     /// id-alg-mtcProof themselves (the verification pipeline does).
     pub fn from_certificate(certificate_der: &[u8]) -> Result<MtcProof> {
-        let (_, _, signature) = crate::entry::certificate_elements(certificate_der)?;
+        let (_, _, signature) = crate::base::entry::certificate_elements(certificate_der)?;
         if signature.tag != 0x03 || signature.content.is_empty() || signature.content[0] != 0 {
             return Err(Error::Malformed("signature BIT STRING"));
         }

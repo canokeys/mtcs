@@ -1,8 +1,8 @@
 //! Relying-party configuration: trusted cosigners, CAs, subtrees and revoked
 //! serial ranges (Sections 7.1 through 7.5 of the draft).
 
-use crate::id::TrustAnchorId;
-use crate::tree::HASH_SIZE;
+use crate::base::id::TrustAnchorId;
+use crate::base::tree::HASH_SIZE;
 use crate::{Error, Result, SignatureAlgorithm};
 
 /// A cosigner's public key and signature algorithm, keyed by its cosigner ID.

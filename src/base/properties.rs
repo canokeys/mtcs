@@ -2,8 +2,8 @@
 //! metadata that may accompany a certificate PEM as a CERTIFICATE PROPERTIES
 //! block (Section 9.2 of the MTC draft).
 
-use crate::id::TrustAnchorId;
-use crate::reader::Reader;
+use crate::base::id::TrustAnchorId;
+use crate::base::reader::Reader;
 use crate::{Error, Result};
 
 /// One property of a CertificatePropertyList.

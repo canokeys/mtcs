@@ -41,40 +41,24 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-#[cfg(feature = "verify")]
-mod ca;
-mod caext;
-#[cfg(feature = "verify")]
-mod cosign;
-mod der;
-mod entry;
-mod id;
-mod landmark;
-mod proof;
-mod properties;
-mod reader;
-#[cfg(feature = "verify")]
-mod time;
-mod tree;
-#[cfg(feature = "verify")]
-mod trust;
+mod base;
 #[cfg(feature = "verify")]
 mod verify;
 
-pub use caext::{MtcCaParameters, parse_mtc_ca_parameters};
-#[cfg(feature = "verify")]
-pub use cosign::SignatureAlgorithm;
-pub use entry::entry_hash_from_certificate;
-pub use id::TrustAnchorId;
-pub use landmark::{Landmark, parse_landmarks};
-pub use proof::{Cosignature, EntryReference, MtcProof, split_serial};
-pub use properties::{CertificatePropertyList, Property};
-pub use tree::{
+pub use base::caext::{MtcCaParameters, parse_mtc_ca_parameters};
+pub use base::entry::entry_hash_from_certificate;
+pub use base::id::TrustAnchorId;
+pub use base::landmark::{Landmark, parse_landmarks};
+pub use base::proof::{Cosignature, EntryReference, MtcProof, split_serial};
+pub use base::properties::{CertificatePropertyList, Property};
+pub use base::tree::{
     HASH_SIZE, Subtree, covering_subtrees, evaluate_inclusion_proof, is_valid_subtree, leaf_hash,
     node_hash, verify_consistency_proof,
 };
 #[cfg(feature = "verify")]
-pub use trust::{CaTrust, CosignerGroup, CosignerInfo, TrustStore, TrustedSubtree};
+pub use verify::cosign::SignatureAlgorithm;
+#[cfg(feature = "verify")]
+pub use verify::trust::{CaTrust, CosignerGroup, CosignerInfo, TrustStore, TrustedSubtree};
 #[cfg(feature = "verify")]
 pub use verify::{
     Verification, VerificationKind, verify_certificate, verify_certificate_ignoring_validity,

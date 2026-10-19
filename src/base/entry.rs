@@ -5,7 +5,7 @@
 //! the entry's fields are the certificate's fields minus the serial number
 //! and signature algorithm, plus the public key hash.
 
-use crate::der::read_element;
+use crate::base::der::read_element;
 
 use crate::{Error, Result};
 use sha2::Digest;
@@ -19,9 +19,9 @@ const TAG_VERSION: u8 = 0xa0; // [0] EXPLICIT Version
 pub(crate) fn certificate_elements<'a>(
     certificate_der: &'a [u8],
 ) -> Result<(
-    crate::der::Element<'a>,
-    crate::der::Element<'a>,
-    crate::der::Element<'a>,
+    crate::base::der::Element<'a>,
+    crate::base::der::Element<'a>,
+    crate::base::der::Element<'a>,
 )> {
     let (outer, rest) = read_element(certificate_der).ok_or(Error::Malformed("certificate DER"))?;
     if outer.tag != TAG_SEQUENCE || !rest.is_empty() {
@@ -84,18 +84,18 @@ pub fn entry_hash_from_certificate(
         hash.update(version.encoded);
         input = rest;
     }
-    let serial = crate::der::next_element(&mut input, "serial number")?;
+    let serial = crate::base::der::next_element(&mut input, "serial number")?;
     if serial.tag != TAG_INTEGER {
         return Err(Error::Malformed("serial number"));
     }
     // The inner signature AlgorithmIdentifier is not part of the log entry.
-    let skipped = crate::der::next_element(&mut input, "signature algorithm")?;
+    let skipped = crate::base::der::next_element(&mut input, "signature algorithm")?;
     if skipped.tag != TAG_SEQUENCE {
         return Err(Error::Malformed("signature algorithm"));
     }
     // issuer, validity, subject: copied into the entry unchanged.
     for field in ["issuer", "validity", "subject"] {
-        let element = crate::der::next_element(&mut input, field)?;
+        let element = crate::base::der::next_element(&mut input, field)?;
         if element.tag != TAG_SEQUENCE {
             return Err(Error::Malformed(field));
         }
@@ -103,7 +103,7 @@ pub fn entry_hash_from_certificate(
     }
     // subjectPublicKeyInfo contributes its algorithm element, then the hash of
     // its complete encoding as an OCTET STRING (prefixed with 0x04 and length).
-    let spki = crate::der::next_element(&mut input, "subjectPublicKeyInfo")?;
+    let spki = crate::base::der::next_element(&mut input, "subjectPublicKeyInfo")?;
     if spki.tag != TAG_SEQUENCE {
         return Err(Error::Malformed("subjectPublicKeyInfo"));
     }

@@ -3,7 +3,7 @@
 //! structure; the cosigner signature algorithm OID it carries is interpreted
 //! by the `verify` feature.
 
-use crate::der::{Element, next_element, read_element};
+use crate::base::der::{Element, next_element, read_element};
 use crate::{Error, Result};
 
 /// The decoded body of an id-pe-mtcCertificationAuthority-SHA256 extension.
@@ -54,7 +54,7 @@ pub fn parse_mtc_ca_parameters(bytes: &[u8]) -> Result<MtcCaParameters> {
     if oid.tag != 0x06 {
         return Err(Error::Malformed("MTCCA sigAlg OID"));
     }
-    let signature_algorithm_oid = crate::id::oid_content_to_dotted(oid.content)?;
+    let signature_algorithm_oid = crate::base::id::oid_content_to_dotted(oid.content)?;
     let min = next_element(&mut input, "MTCCA minSerial")?;
     let max = next_element(&mut input, "MTCCA maxSerial")?;
     if !input.is_empty() {

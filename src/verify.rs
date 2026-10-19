@@ -13,12 +13,17 @@
 //! carrying a forged-looking CA cosignature is anomalous enough to report
 //! separately from a quorum shortfall.
 
-use crate::der::{Element, read_element};
-use crate::entry::{certificate_elements, entry_hash_from_certificate};
-use crate::id::TrustAnchorId;
-use crate::proof::MtcProof;
-use crate::tree::{HASH_SIZE, Subtree, evaluate_inclusion_proof};
-use crate::trust::TrustStore;
+pub(crate) mod ca;
+pub(crate) mod cosign;
+pub(crate) mod time;
+pub(crate) mod trust;
+
+use crate::base::der::{Element, read_element};
+use crate::base::entry::{certificate_elements, entry_hash_from_certificate};
+use crate::base::id::TrustAnchorId;
+use crate::base::proof::MtcProof;
+use crate::base::tree::{HASH_SIZE, Subtree, evaluate_inclusion_proof};
+use crate::verify::trust::TrustStore;
 use crate::{Error, Result};
 
 const MTC_PROOF_OID: &str = "1.3.6.1.5.5.7.6.67";
@@ -62,7 +67,7 @@ fn check_mtc_proof_algorithm(element: Element<'_>) -> Result<()> {
         return Err(Error::NotMtc);
     }
     let (oid, rest) = read_element(element.content).ok_or(Error::Malformed("algorithm OID"))?;
-    if oid.tag != 0x06 || crate::id::oid_content_to_dotted(oid.content)? != MTC_PROOF_OID {
+    if oid.tag != 0x06 || crate::base::id::oid_content_to_dotted(oid.content)? != MTC_PROOF_OID {
         return Err(Error::NotMtc);
     }
     // The AlgorithmIdentifier parameters are omitted for id-alg-mtcProof.
@@ -76,7 +81,7 @@ fn serial_number(serial: Element<'_>) -> Result<u64> {
     if serial.tag != 0x02 {
         return Err(Error::Malformed("serial number"));
     }
-    let reference = crate::proof::split_serial(serial.content).ok_or(Error::InvalidSerial)?;
+    let reference = crate::base::proof::split_serial(serial.content).ok_or(Error::InvalidSerial)?;
     if reference.log_number == 0 {
         return Err(Error::InvalidSerial);
     }
@@ -92,7 +97,8 @@ fn validity_unix(validity: Element<'_>) -> Result<(i64, i64)> {
     if !rest.is_empty() {
         return Err(Error::Malformed("validity"));
     }
-    let parse = |element: Element<'_>| crate::time::parse_time(element.tag, element.content);
+    let parse =
+        |element: Element<'_>| crate::verify::time::parse_time(element.tag, element.content);
     Ok((parse(not_before)?, parse(not_after)?))
 }
 
@@ -141,11 +147,12 @@ fn verify_with(
     {
         input = rest;
     }
-    let serial = serial_number(crate::der::next_element(&mut input, "serial")?)?;
-    check_mtc_proof_algorithm(crate::der::next_element(&mut input, "signature")?)?;
-    let issuer = crate::der::next_element(&mut input, "issuer")?;
-    let (not_before, not_after) = validity_unix(crate::der::next_element(&mut input, "validity")?)?;
-    let ca_id = crate::ca::trust_anchor_id_from_name(issuer.content)?;
+    let serial = serial_number(crate::base::der::next_element(&mut input, "serial")?)?;
+    check_mtc_proof_algorithm(crate::base::der::next_element(&mut input, "signature")?)?;
+    let issuer = crate::base::der::next_element(&mut input, "issuer")?;
+    let (not_before, not_after) =
+        validity_unix(crate::base::der::next_element(&mut input, "validity")?)?;
+    let ca_id = crate::verify::ca::trust_anchor_id_from_name(issuer.content)?;
     let log_number = (serial >> 48) as u16;
     let entry_index = serial & 0xffff_ffff_ffff;
     if log_number == 0 {
@@ -211,7 +218,7 @@ fn verify_with(
         });
         // Unrecognized cosigners MUST be ignored (Section 7.2 of the draft).
         let Some(info) = info else { continue };
-        match crate::cosign::verify_cosignature(
+        match crate::verify::cosign::verify_cosignature(
             &info.id,
             &log_id,
             info.algorithm,

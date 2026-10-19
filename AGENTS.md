@@ -1,10 +1,12 @@
 # Repository guidance
 
 - Write code, comments, rustdoc, diagnostics and documentation in English.
-- This is one independent crate. The no-feature base layer holds wire formats, trust
-  anchor IDs, Merkle tree math, log entry hashing, and landmark and certificate
-  property parsing. The default `verify` feature adds cosignature cryptography and
-  the relying-party pipeline (the cosign, trust, ca, time and verify modules).
+- This is one independent crate. The no-feature base layer (src/base.rs and
+  src/base/) holds wire formats, trust anchor IDs, Merkle tree math, log entry
+  hashing, and landmark and certificate property parsing; nothing under
+  src/base/ may depend on a cryptographic backend. The default `verify` feature
+  (src/verify.rs and src/verify/) adds cosignature cryptography and the
+  relying-party pipeline (the cosign, trust, ca and time modules).
 - Callers own inputs, trust configuration and results. Do not add mutable globals,
   handle registries, clocks, randomness, transports or async runtimes to the crate;
   verification takes a caller-supplied timestamp.
