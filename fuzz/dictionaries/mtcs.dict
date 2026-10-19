@@ -1,6 +1,11 @@
-# libFuzzer dictionary for mtcs. Learned from fuzz runs (the trust anchor ID
-# tokens) plus the format's fixed magic bytes. Use with -dict=.
+# libFuzzer dictionary for mtcs. Use with -dict=.
 # Syntax: name="escaped bytes"; \xNN escapes and \n are supported.
+#
+# Regenerate the taid_* tokens from the demo corpus cosigner IDs with
+# TrustAnchorId::from_dotted("<dotted>").as_bytes() (the child-9 variants
+# append .child(9) first), escaping each byte as \xNN. The oid_* tokens are
+# the DER encodings of the Section 3 OIDs and subtree_label is the Section
+# 5.3.1 domain-separation label; those change only with the wire format.
 
 # Trust anchor IDs (binary RELATIVE-OID content) of the demo corpus cosigners,
 # plus the child-9 mangling the policy harness uses for unrecognized IDs.
