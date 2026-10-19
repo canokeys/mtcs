@@ -47,8 +47,13 @@ use mtcs::{CaTrust, TrustStore, verify_certificate};
 
 let mut store = TrustStore::new();
 store.add_ca(CaTrust::from_ca_certificate(&ca_cert_der)?);
-let verification = verify_certificate(&store, &certificate_der, Some(now_unix))?;
+let verification = verify_certificate(&store, &certificate_der, now_unix)?;
 ```
+
+`now_unix` is a caller-supplied Unix timestamp (the crate never reads the
+clock); `verify_certificate_ignoring_validity` skips the validity-window
+check for debugging. The crate's front-page rustdoc shows the same example
+as a compiled doctest.
 
 See the rustdoc for `TrustStore`/`CaTrust` to configure required cosigner
 quorums, revoked serial ranges and trusted subtrees.
