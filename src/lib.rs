@@ -89,12 +89,14 @@ pub enum Error {
     #[error("inclusion proof evaluation failed")]
     ProofEvaluation,
     /// The subtree hash matched no trusted subtree and cosignatures were
-    /// insufficient. `missing` lists required cosigners absent from the
-    /// MTCProof; `invalid` lists recognized cosigners whose cosignature was
-    /// present but failed verification.
+    /// insufficient. `invalid` lists recognized cosigners whose cosignature was
+    /// present but failed verification. `missing` lists the *candidate*
+    /// cosigners that would have helped: for a k-of-n group it contains every
+    /// unsatisfied member, of which any `threshold` subset would have sufficed
+    /// — it is not a list of cosigners that are all required.
     #[error("cosigner policy not satisfied (missing: {missing:?}, invalid: {invalid:?})")]
     PolicyUnsatisfied {
-        /// Required cosigners with no cosignature in the MTCProof.
+        /// Required cosigners with no verifying cosignature in the MTCProof.
         missing: Vec<TrustAnchorId>,
         /// Recognized cosigners whose cosignature failed verification.
         invalid: Vec<TrustAnchorId>,

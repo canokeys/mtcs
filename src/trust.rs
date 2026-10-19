@@ -23,22 +23,32 @@ pub struct CosignerInfo {
 /// that verifies (Section 7.3 of the draft: "a quorum of signatures from
 /// additional cosigners"). A CA collecting cosignatures from a redundant set
 /// (Section 6.3) may then legitimately present different subsets over time.
+///
+/// Construction is only possible through [`CosignerGroup::new`] and
+/// [`CosignerGroup::single`], which validate the threshold and reject duplicate
+/// members. Per Section 7.3, the CA cosigner's role is authenticity; it never
+/// counts toward group thresholds (enforced at evaluation, so it cannot be
+/// bypassed by construction).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CosignerGroup {
-    /// Members whose cosignatures count toward the threshold.
-    pub members: Vec<CosignerInfo>,
-    /// Minimum number of distinct members whose cosignature must verify.
-    pub threshold: usize,
+    members: Vec<CosignerInfo>,
+    threshold: usize,
 }
 
 impl CosignerGroup {
     /// A group of `members` requiring `threshold` verified cosignatures.
     ///
     /// # Errors
-    /// Returns an error if `threshold` is zero or exceeds the member count.
+    /// Returns an error if `threshold` is zero or exceeds the member count,
+    /// or if a member's ID appears twice.
     pub fn new(members: Vec<CosignerInfo>, threshold: usize) -> Result<Self> {
         if threshold == 0 || threshold > members.len() {
             return Err(Error::Malformed("cosigner group threshold"));
+        }
+        for (i, member) in members.iter().enumerate() {
+            if members[..i].iter().any(|m| m.id == member.id) {
+                return Err(Error::Malformed("duplicate cosigner in group"));
+            }
         }
         Ok(Self { members, threshold })
     }
@@ -49,6 +59,30 @@ impl CosignerGroup {
             members: vec![member],
             threshold: 1,
         }
+    }
+
+    /// The group members.
+    pub fn members(&self) -> &[CosignerInfo] {
+        &self.members
+    }
+
+    /// The minimum number of distinct members whose cosignature must verify.
+    pub fn threshold(&self) -> usize {
+        self.threshold
+    }
+
+    /// Evaluate the group against a set of verified cosigner IDs. Defensive by
+    /// construction: an out-of-bounds threshold is unsatisfied, never vacuous,
+    /// and only distinct IDs count.
+    pub(crate) fn satisfied_by(&self, satisfied: &[TrustAnchorId]) -> bool {
+        if self.threshold == 0 || self.threshold > self.members.len() {
+            return false;
+        }
+        satisfied
+            .iter()
+            .filter(|id| self.members.iter().any(|m| m.id == **id))
+            .count()
+            >= self.threshold
     }
 }
 
@@ -97,13 +131,25 @@ impl CaTrust {
 
     /// Require one specific additional cosigner on this CA's standalone
     /// certificates (sugar for a single-member group).
-    pub fn require_cosigner(&mut self, cosigner: CosignerInfo) {
-        self.required_groups.push(CosignerGroup::single(cosigner));
+    ///
+    /// # Errors
+    /// Returns an error if the cosigner is the CA cosigner itself: Section 7.3
+    /// assigns it the authenticity role, and it never counts toward
+    /// transparency groups.
+    pub fn require_cosigner(&mut self, cosigner: CosignerInfo) -> Result<()> {
+        self.require_group(CosignerGroup::single(cosigner))
     }
 
     /// Require a quorum of cosignatures from a group (Section 7.3).
-    pub fn require_group(&mut self, group: CosignerGroup) {
+    ///
+    /// # Errors
+    /// Returns an error if any member is the CA cosigner itself.
+    pub fn require_group(&mut self, group: CosignerGroup) -> Result<()> {
+        if group.members().iter().any(|m| m.id == self.ca_cosigner.id) {
+            return Err(Error::Malformed("CA cosigner in transparency group"));
+        }
         self.required_groups.push(group);
+        Ok(())
     }
 
     /// Revoke an inclusive range of serial numbers (Section 7.5 of the draft).
@@ -122,7 +168,7 @@ impl CaTrust {
         }
         self.required_groups
             .iter()
-            .flat_map(|group| group.members.iter())
+            .flat_map(|group| group.members().iter())
             .find(|c| c.id == *id)
     }
 }
@@ -138,7 +184,6 @@ pub struct TrustStore {
     /// additional cosigners across CAs").
     pub required_for_all: Vec<CosignerGroup>,
 }
-
 impl TrustStore {
     /// An empty trust store.
     pub fn new() -> Self {
@@ -158,5 +203,59 @@ impl TrustStore {
     /// Look up a CA by its trust anchor ID.
     pub fn ca(&self, ca_id: &TrustAnchorId) -> Option<&CaTrust> {
         self.cas.iter().find(|ca| ca.ca_id == *ca_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn member(dotted: &str) -> CosignerInfo {
+        CosignerInfo {
+            id: TrustAnchorId::from_dotted(dotted).unwrap(),
+            algorithm: SignatureAlgorithm::Ed25519,
+            spki_der: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn group_construction_rejects_bad_thresholds_and_duplicates() {
+        let a = member("32473.2.1");
+        let b = member("32473.2.2");
+        assert!(CosignerGroup::new(vec![a.clone()], 0).is_err());
+        assert!(CosignerGroup::new(vec![a.clone()], 2).is_err());
+        assert!(CosignerGroup::new(vec![], 1).is_err());
+        assert!(CosignerGroup::new(vec![a.clone(), a.clone()], 2).is_err());
+        assert!(CosignerGroup::new(vec![a.clone(), b.clone()], 2).is_ok());
+        assert!(CosignerGroup::new(vec![a, b], 1).is_ok());
+    }
+
+    #[test]
+    fn satisfied_by_counts_distinct_members_and_rejects_bad_shapes() {
+        let a = member("32473.2.1");
+        let b = member("32473.2.2");
+        let group = CosignerGroup::new(vec![a.clone(), b.clone()], 2).unwrap();
+        let only_a = vec![a.id.clone()];
+        let both = vec![a.id.clone(), b.id.clone()];
+        assert!(!group.satisfied_by(&only_a));
+        assert!(group.satisfied_by(&both));
+        // A hand-built invalid shape (same module, so fields are accessible) is
+        // unsatisfied, never vacuously satisfied.
+        let degenerate = CosignerGroup {
+            members: vec![a.clone()],
+            threshold: 0,
+        };
+        assert!(!degenerate.satisfied_by(&both));
+        let overdrawn = CosignerGroup {
+            members: vec![a.clone()],
+            threshold: 2,
+        };
+        assert!(!overdrawn.satisfied_by(&both));
+        // A duplicated hand-built member still counts once.
+        let duplicated = CosignerGroup {
+            members: vec![a.clone(), a.clone()],
+            threshold: 2,
+        };
+        assert!(!duplicated.satisfied_by(&both));
     }
 }

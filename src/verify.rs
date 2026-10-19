@@ -18,7 +18,7 @@ use crate::entry::{certificate_elements, entry_hash_from_certificate};
 use crate::id::TrustAnchorId;
 use crate::proof::MtcProof;
 use crate::tree::{HASH_SIZE, Subtree, evaluate_inclusion_proof};
-use crate::trust::{CosignerGroup, TrustStore};
+use crate::trust::TrustStore;
 use crate::{Error, Result};
 
 const MTC_PROOF_OID: &str = "1.3.6.1.5.5.7.6.67";
@@ -206,7 +206,7 @@ fn verify_with(
             store
                 .required_for_all
                 .iter()
-                .flat_map(|group| group.members.iter())
+                .flat_map(|group| group.members().iter())
                 .find(|c| c.id == cosigner_id)
         });
         // Unrecognized cosigners MUST be ignored (Section 7.2 of the draft).
@@ -245,22 +245,21 @@ fn verify_with(
     if !satisfied_policy {
         note_missing(&ca.ca_cosigner.id.clone());
     }
-    let group_ok = |group: &CosignerGroup| {
-        group
-            .members
-            .iter()
-            .filter(|member| satisfied.contains(&member.id))
-            .count()
-            >= group.threshold
-    };
+    // Transparency groups are evaluated without the CA cosigner: its role is
+    // authenticity (Section 7.3), so it never counts toward group thresholds.
+    let group_satisfied: Vec<TrustAnchorId> = satisfied
+        .iter()
+        .filter(|id| **id != ca.ca_cosigner.id)
+        .cloned()
+        .collect();
     for group in ca
         .required_groups
         .iter()
         .chain(store.required_for_all.iter())
     {
-        if !group_ok(group) {
+        if !group.satisfied_by(&group_satisfied) {
             satisfied_policy = false;
-            for member in &group.members {
+            for member in group.members() {
                 note_missing(&member.id);
             }
         }

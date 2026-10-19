@@ -67,12 +67,14 @@ fn additional_required_cosigners_are_enforced() {
         "32473.2.1",
         SignatureAlgorithm::EcdsaP256Sha256,
         keys::C_32473_2_1,
-    ));
+    ))
+    .unwrap();
     ca.require_cosigner(cosigner(
         "32473.2.2",
         SignatureAlgorithm::MlDsa65,
         keys::C_32473_2_2,
-    ));
+    ))
+    .unwrap();
     let mut with_extras = TrustStore::new();
     with_extras.add_ca(ca);
 
@@ -245,9 +247,11 @@ fn cosigner_groups_support_k_of_n_quorums() {
 
     // 1-of-2 over the two witnesses passes.
     let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
-    ca.require_group(CosignerGroup::new(vec![p256.clone(), mldsa65.clone()], 1).unwrap());
+    ca.require_group(CosignerGroup::new(vec![p256.clone(), mldsa65.clone()], 1).unwrap())
+        .unwrap();
     // 2-of-2 over the two witnesses passes (both cosignatures are present).
-    ca.require_group(CosignerGroup::new(vec![p256.clone(), mldsa65.clone()], 2).unwrap());
+    ca.require_group(CosignerGroup::new(vec![p256.clone(), mldsa65.clone()], 2).unwrap())
+        .unwrap();
     let mut store = TrustStore::new();
     store.add_ca(ca);
     let verification = verify_certificate(&store, STANDALONE, NOW).unwrap();
@@ -264,7 +268,8 @@ fn cosigner_groups_support_k_of_n_quorums() {
 
     // A group whose members are all absent from the certificate fails.
     let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
-    ca.require_group(CosignerGroup::new(vec![absent.clone()], 1).unwrap());
+    ca.require_group(CosignerGroup::new(vec![absent.clone()], 1).unwrap())
+        .unwrap();
     let mut store = TrustStore::new();
     store.add_ca(ca);
     let Err(Error::PolicyUnsatisfied { missing, .. }) = verify_certificate(&store, STANDALONE, NOW)
@@ -295,7 +300,8 @@ fn trust_store_and_cosignature_failures_are_distinguished() {
         id: id("32473.2.1"),
         algorithm: SignatureAlgorithm::EcdsaP256Sha256,
         spki_der: vec![0x30, 0x03, 0x06, 0x01, 0x00], // truncated SPKI
-    });
+    })
+    .unwrap();
     let mut store = TrustStore::new();
     store.add_ca(ca);
     assert!(matches!(
@@ -312,7 +318,8 @@ fn trust_store_and_cosignature_failures_are_distinguished() {
         id: id("32473.2.2"),
         algorithm: SignatureAlgorithm::MlDsa65,
         spki_der: wrong_spki,
-    });
+    })
+    .unwrap();
     let mut store = TrustStore::new();
     store.add_ca(ca);
     let Err(Error::PolicyUnsatisfied { missing, invalid }) =
@@ -381,4 +388,70 @@ fn ca_certificate_profile_is_enforced() {
         .unwrap();
     no_cert_sign[pos + inner + 3] = 0x40; // nonRepudiation instead of keyCertSign
     assert!(CaTrust::from_ca_certificate(&no_cert_sign).is_err());
+}
+
+#[test]
+fn ca_cosigner_cannot_join_transparency_groups() {
+    // Section 7.3 separates authenticity (CA cosigner) from transparency
+    // (additional cosigners): the CA cosigner is rejected from groups.
+    let ca_key = CosignerInfo {
+        id: id("32473.1"),
+        algorithm: SignatureAlgorithm::MlDsa44,
+        spki_der: hex::decode(keys::C_32473_1).unwrap(),
+    };
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    assert!(ca.require_cosigner(ca_key.clone()).is_err());
+    assert!(
+        ca.require_group(CosignerGroup::new(vec![ca_key.clone()], 1).unwrap())
+            .is_err()
+    );
+
+    // Evaluation enforces it too: the CA signature never counts toward a
+    // threshold, so a group {CA, 32473.2.1} at threshold 2 is short even on a
+    // certificate carrying both signatures. (Built bypassing CaTrust to pin
+    // the evaluation rule; the constructor rejects it as shown above.)
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    ca.required_groups.push(
+        CosignerGroup::new(
+            vec![
+                ca_key.clone(),
+                cosigner(
+                    "32473.2.1",
+                    SignatureAlgorithm::EcdsaP256Sha256,
+                    keys::C_32473_2_1,
+                ),
+            ],
+            2,
+        )
+        .unwrap(),
+    );
+    let mut store = TrustStore::new();
+    store.add_ca(ca);
+    assert!(matches!(
+        verify_certificate(&store, STANDALONE, NOW),
+        Err(Error::PolicyUnsatisfied { .. })
+    ));
+}
+
+#[test]
+fn missing_lists_candidates_not_all_required_cosigners() {
+    // A 2-of-3 group with one valid signature reports the two unsatisfied
+    // members as candidates; either would have sufficed (see the rustdoc on
+    // Error::PolicyUnsatisfied).
+    let mldsa65 = cosigner("32473.2.2", SignatureAlgorithm::MlDsa65, keys::C_32473_2_2);
+    let absent1 = cosigner("32473.2.3", SignatureAlgorithm::MlDsa87, keys::C_32473_2_3);
+    let absent2 = cosigner("32473.3.1", SignatureAlgorithm::MlDsa44, keys::C_32473_3_1);
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    ca.require_group(
+        CosignerGroup::new(vec![mldsa65, absent1.clone(), absent2.clone()], 2).unwrap(),
+    )
+    .unwrap();
+    let mut store = TrustStore::new();
+    store.add_ca(ca);
+    // standalone.der carries 32473.2.2, so the group has one of two needed.
+    let Err(Error::PolicyUnsatisfied { missing, .. }) = verify_certificate(&store, STANDALONE, NOW)
+    else {
+        panic!("expected PolicyUnsatisfied")
+    };
+    assert_eq!(missing, [id("32473.2.3"), id("32473.3.1")]);
 }
