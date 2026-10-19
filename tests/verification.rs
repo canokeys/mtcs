@@ -286,9 +286,18 @@ fn cosigner_groups_validate_their_threshold() {
         SignatureAlgorithm::EcdsaP256Sha256,
         keys::C_32473_2_1,
     );
-    assert!(CosignerGroup::new(vec![member.clone()], 0).is_err());
-    assert!(CosignerGroup::new(vec![member.clone()], 2).is_err());
-    assert!(CosignerGroup::new(vec![], 1).is_err());
+    assert!(matches!(
+        CosignerGroup::new(vec![member.clone()], 0),
+        Err(Error::Configuration(_))
+    ));
+    assert!(matches!(
+        CosignerGroup::new(vec![member.clone()], 2),
+        Err(Error::Configuration(_))
+    ));
+    assert!(matches!(
+        CosignerGroup::new(vec![], 1),
+        Err(Error::Configuration(_))
+    ));
     assert!(CosignerGroup::new(vec![member], 1).is_ok());
 }
 
@@ -454,4 +463,67 @@ fn missing_lists_candidates_not_all_required_cosigners() {
         panic!("expected PolicyUnsatisfied")
     };
     assert_eq!(missing, [id("32473.2.3"), id("32473.3.1")]);
+}
+
+#[test]
+fn truncated_and_tampered_certificates_never_panic() {
+    // Verifiers face untrusted input: no parse path may panic. Every prefix of
+    // every fixture must return an error (a certificate prefix is never valid),
+    // and byte flips must produce an error or a verdict, never a panic.
+    let store = store();
+    let fixtures: [&[u8]; 7] = [
+        STANDALONE,
+        STANDALONE_CA_ONLY,
+        UNUSED_BIT_BAD,
+        BITFLIP_BAD,
+        LANDMARK_32,
+        LANDMARK_2121,
+        CA,
+    ];
+    for fixture in fixtures {
+        for end in 0..fixture.len() {
+            assert!(
+                verify_certificate(&store, &fixture[..end], NOW).is_err(),
+                "prefix of {end} bytes unexpectedly verified"
+            );
+        }
+        // Strided bit flips (the full sweep costs too much ML-DSA verification
+        // time to no extra benefit).
+        for position in (0..fixture.len()).step_by(17) {
+            let mut tampered = fixture.to_vec();
+            tampered[position] ^= 1;
+            let _ = verify_certificate(&store, &tampered, NOW);
+        }
+    }
+}
+
+#[test]
+fn trust_store_routes_between_multiple_cas() {
+    // A second, unrelated CA in the store does not disturb the first.
+    let fabricated = TrustAnchorId::from_dotted("32473.99").unwrap();
+    let mut other = CaTrust::new(
+        fabricated.clone(),
+        CosignerInfo {
+            id: fabricated,
+            algorithm: SignatureAlgorithm::MlDsa44,
+            spki_der: hex::decode(keys::C_32473_1).unwrap(),
+        },
+    );
+    other.revoke_range(0, u64::MAX); // Everything revoked: it must not matter.
+    let mut multi = store();
+    multi.add_ca(other);
+    assert!(verify_certificate(&multi, STANDALONE, NOW).is_ok());
+
+    // The convenience wrapper behaves like pushing to required_for_all.
+    let mut strict = store();
+    strict.require_group_for_all(CosignerGroup::single(cosigner(
+        "32473.2.1",
+        SignatureAlgorithm::EcdsaP256Sha256,
+        keys::C_32473_2_1,
+    )));
+    assert!(verify_certificate(&strict, STANDALONE, NOW).is_ok());
+    assert!(matches!(
+        verify_certificate(&strict, STANDALONE_CA_ONLY, NOW),
+        Err(Error::PolicyUnsatisfied { .. })
+    ));
 }

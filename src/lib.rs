@@ -20,6 +20,23 @@
 //!
 //! Certificate issuance, log operation, monitoring, and network protocols
 //! (tlog-tiles serving, landmark distribution) are out of scope.
+//!
+//! ```
+//! # #[cfg(feature = "verify")] fn run() -> mtcs::Result<()> {
+//! let mut store = mtcs::TrustStore::new();
+//! store.add_ca(mtcs::CaTrust::from_ca_certificate(include_bytes!(
+//!     "../tests/fixtures/ca.der"
+//! ))?);
+//! let verification = mtcs::verify_certificate(
+//!     &store,
+//!     include_bytes!("../tests/fixtures/standalone.der"),
+//!     1735689600, // 2025-01-01T00:00:00Z
+//! )?;
+//! assert_eq!(verification.entry_index, 10);
+//! # Ok(())
+//! # }
+//! # #[cfg(feature = "verify")] run().unwrap();
+//! ```
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -70,6 +87,10 @@ pub enum Error {
     /// The input is not a syntactically valid X.509 certificate or MTC structure.
     #[error("malformed input: {0}")]
     Malformed(&'static str),
+    /// A relying-party configuration error (trust store construction), never a
+    /// property of the certificate being verified.
+    #[error("invalid trust configuration: {0}")]
+    Configuration(&'static str),
     /// The certificate is not a Merkle Tree certificate (unexpected signature algorithm).
     #[error("not a Merkle Tree certificate")]
     NotMtc,

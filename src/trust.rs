@@ -43,11 +43,11 @@ impl CosignerGroup {
     /// or if a member's ID appears twice.
     pub fn new(members: Vec<CosignerInfo>, threshold: usize) -> Result<Self> {
         if threshold == 0 || threshold > members.len() {
-            return Err(Error::Malformed("cosigner group threshold"));
+            return Err(Error::Configuration("cosigner group threshold"));
         }
         for (i, member) in members.iter().enumerate() {
             if members[..i].iter().any(|m| m.id == member.id) {
-                return Err(Error::Malformed("duplicate cosigner in group"));
+                return Err(Error::Configuration("duplicate cosigner in group"));
             }
         }
         Ok(Self { members, threshold })
@@ -110,6 +110,9 @@ pub struct CaTrust {
     pub ca_cosigner: CosignerInfo,
     /// Cosigner groups that must all be satisfied on this CA's standalone
     /// certificates: an AND of k-of-n groups. Transparency policies go here.
+    /// Direct pushes are tolerated; per Section 7.3 the CA cosigner never
+    /// counts toward a group's threshold at evaluation regardless of how the
+    /// group was added.
     pub required_groups: Vec<CosignerGroup>,
     /// Revoked serial number ranges, inclusive on both ends (Section 7.5).
     pub revoked_ranges: Vec<core::ops::RangeInclusive<u64>>,
@@ -146,7 +149,7 @@ impl CaTrust {
     /// Returns an error if any member is the CA cosigner itself.
     pub fn require_group(&mut self, group: CosignerGroup) -> Result<()> {
         if group.members().iter().any(|m| m.id == self.ca_cosigner.id) {
-            return Err(Error::Malformed("CA cosigner in transparency group"));
+            return Err(Error::Configuration("CA cosigner in transparency group"));
         }
         self.required_groups.push(group);
         Ok(())
