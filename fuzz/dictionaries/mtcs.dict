@@ -1,0 +1,43 @@
+# libFuzzer dictionary for mtcs. Learned from fuzz runs (the trust anchor ID
+# tokens) plus the format's fixed magic bytes. Use with -dict=.
+# Syntax: name="escaped bytes"; \xNN escapes and \n are supported.
+
+# Trust anchor IDs (binary RELATIVE-OID content) of the demo corpus cosigners,
+# plus the child-9 mangling the policy harness uses for unrecognized IDs.
+taid_32473_1="\x81\xfd\x59\x01"
+taid_32473_1_9="\x81\xfd\x59\x01\x09"
+taid_32473_2_1="\x81\xfd\x59\x02\x01"
+taid_32473_2_1_9="\x81\xfd\x59\x02\x01\x09"
+taid_32473_2_2="\x81\xfd\x59\x02\x02"
+taid_32473_2_2_9="\x81\xfd\x59\x02\x02\x09"
+taid_32473_2_3="\x81\xfd\x59\x02\x03"
+
+# OID DER elements: id-alg-mtcProof, the MTC CA extension,
+# id-rdna-trustAnchorID, and id-alg-unsigned.
+oid_mtc_proof="\x06\x08\x2b\x06\x01\x05\x05\x07\x06\x43"
+oid_mtc_ca="\x06\x09\x2b\x06\x01\x05\x05\x07\x01\x26"
+oid_trust_anchor_id="\x06\x08\x2b\x06\x01\x05\x05\x07\x19\x03"
+oid_unsigned="\x06\x08\x2b\x06\x01\x05\x05\x07\x06\x24"
+
+# The CosignedSubtree domain-separation label (Section 5.3.1).
+subtree_label="subtree/v1\x0a\x00"
+
+# DER tags and common TLV shapes.
+der_sequence="\x30"
+der_integer="\x02"
+der_bit_string="\x03"
+der_octet_string="\x04"
+der_oid="\x06"
+der_relative_oid="\x0d"
+der_set="\x31"
+der_version_explicit="\xa0"
+der_extensions_explicit="\xa3"
+der_boolean_true="\x01\x01\xff"
+
+# Structural integer shapes (little-endian arbitrary input fields, and
+# big-endian u16/u24/u48/u64 wire fields).
+u64_zero="\x00\x00\x00\x00\x00\x00\x00\x00"
+u64_one="\x01\x00\x00\x00\x00\x00\x00\x00"
+u64_max="\xff\xff\xff\xff\xff\xff\xff\xff"
+u16_zero="\x00\x00"
+u16_one="\x00\x01"

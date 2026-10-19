@@ -61,3 +61,34 @@ jobs:
         name: Check the base layer stays free of cryptographic backends
         run: |
           ! cargo tree --edges no-dev --no-default-features --locked | grep -E 'p256|p384|ed25519-dalek|ml-dsa|signature'
+  fuzz:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: nightly
+      - name: Cache Cargo dependencies and build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo
+            fuzz/target
+          key: fuzz-cargo-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: |
+            fuzz-cargo-
+      - run: cargo install cargo-fuzz --locked --version 0.13.2
+      # A short smoke run per target; extended fuzzing belongs to CIFuzz-style
+      # infrastructure, not per-commit CI. libFuzzer grows the positional corpus
+      # directory in place, so seeds are copied to a scratch directory first.
+      - run: |
+          set -e
+          for spec in "fuzz_verify verify" "fuzz_parse parse" "fuzz_policy policy"; do
+            set -- $spec
+            corpus="$(mktemp -d)"
+            cp fuzz/seeds/"$2"/* "$corpus/"
+            cargo fuzz run "$1" --fuzz-dir fuzz -- -max_total_time=60 -dict=fuzz/dictionaries/mtcs.dict "$corpus"
+          done

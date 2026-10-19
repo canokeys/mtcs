@@ -29,4 +29,11 @@
   and git diff --check. Exclude build artifacts, caches, private keys and
   credentials. tests/keys.rs contains public keys only; never commit cosigner
   private keys (the demo's mtc.json embeds them).
+- Fuzz with cargo-fuzz on nightly (`cargo +nightly fuzz run <target> --fuzz-dir fuzz -- ...`).
+  Seeds live in fuzz/seeds (public demo corpus only); fuzz/target, fuzz/corpus and
+  fuzz/artifacts are never committed. libFuzzer grows the positional corpus
+  directory in place, so always copy seeds to a scratch directory first;
+  fuzz/.gitignore additionally rejects extensionless grown-corpus files under
+  seeds/. Run a smoke pass before releases; per-commit CI runs one minute per
+  target.
 - Keep the package licensed under Apache-2.0. README owns usage and release setup.

@@ -1,0 +1,12 @@
+# cargo-fuzz build artifacts and generated corpus; seeds live in seeds/.
+target/
+artifacts/
+corpus/
+
+# Only extension-bearing fixtures are seeds. libFuzzer's grown corpus files
+# (40-hex names, no extension) must never be committed.
+seeds/*/*
+!seeds/*/*.der
+!seeds/*/*.json
+!seeds/*/*.bin
+!seeds/*/*.txt

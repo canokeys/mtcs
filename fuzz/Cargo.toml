@@ -1,0 +1,37 @@
+[package]
+name = "mtcs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
+hex = "0.4.3"
+libfuzzer-sys = "0.4"
+
+[dependencies.mtcs]
+path = ".."
+
+[[bin]]
+name = "fuzz_verify"
+path = "fuzz_targets/fuzz_verify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parse"
+path = "fuzz_targets/fuzz_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_policy"
+path = "fuzz_targets/fuzz_policy.rs"
+test = false
+doc = false
+bench = false
