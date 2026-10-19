@@ -3,6 +3,7 @@
 [![CI](https://github.com/canokeys/mtcs/actions/workflows/ci.yml/badge.svg)](https://github.com/canokeys/mtcs/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/mtcs.svg)](https://crates.io/crates/mtcs)
 [![docs.rs](https://docs.rs/mtcs/badge.svg)](https://docs.rs/mtcs)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-blue)](Cargo.toml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/canokeys/mtcs/blob/main/LICENSE)
 
 Offline verification of Merkle Tree Certificates (MTCs), following the IETF
@@ -58,6 +59,22 @@ as a compiled doctest.
 See the rustdoc for `TrustStore`/`CaTrust` to configure required cosigner
 quorums, revoked serial ranges and trusted subtrees.
 
+## Features
+
+- `verify` (default): cosignature verification and the relying-party
+  verification pipeline, built on the current RustCrypto stack.
+- With `default-features = false`, only the base layer: wire formats, trust
+  anchor IDs, Merkle tree math and log entry hashing, with no cryptographic
+  backends (this is how [`x509-info`](https://github.com/canokeys/x509-info)
+  consumes the crate):
+
+```toml
+mtcs = { version = "0.3", default-features = false }
+```
+
+The crate requires Rust 1.88 (the `verify` stack's transitive MSRV); the base
+layer also compiles for `wasm32-unknown-unknown`.
+
 ## Examples
 
 ```sh
@@ -77,6 +94,11 @@ corpus committed under `tests/fixtures/`; during development, the full
 28-certificate corpus was additionally cross-validated out of tree against the
 demo's own `verify` subcommand, with matching pass/fail verdicts on all of them.
 
+Fuzzing uses cargo-fuzz: three libFuzzer targets (the parsers, the full
+verification pipeline, and the verification policy with input-driven trust
+stores) seeded from the same corpus run as a per-commit CI smoke, plus a
+scheduled thirty-minute weekly run per target.
+
 ## Wire-format compatibility
 
 This crate implements the "plants-07" wire format only: the IANA-allocated OIDs
@@ -86,6 +108,10 @@ minted by the earlier Cloudflare/Chrome experiment used the experimental arc
 `1.3.6.1.4.1.44363.47.*` and, before draft -06, a UTF8String issuer attribute;
 such certificates are rejected (`NotMtc` or `Malformed`). There is no
 compatibility mode for the experimental encoding.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## License
 
