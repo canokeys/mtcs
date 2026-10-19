@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## 0.3.1
+
+- Docs: the README usage example still passed `Some(now)`;
+  `verify_certificate` has taken a mandatory `now: i64` since 0.2.0. Also
+  documented the feature split, the Rust 1.88 MSRV and the fuzzing setup, and
+  linked this changelog.
+- Internal: source files are grouped into `src/base/` and `src/verify/` along
+  the feature boundary. No API changes.
+
 ## 0.3.0
 
 - **Breaking:** `CosignerGroup` fields are private with read-only accessors;
