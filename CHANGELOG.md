@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## 0.3.0
+
+- **Breaking:** `CosignerGroup` fields are private with read-only accessors;
+  construction goes through `CosignerGroup::new`/`single`, which now also
+  rejects duplicate member IDs. A struct literal could previously bypass
+  threshold validation, and a zero threshold was vacuously satisfied.
+- **Breaking:** `CaTrust::require_cosigner` and `CaTrust::require_group` return
+  `Result` and reject the CA cosigner itself. Per Section 7.3 of the draft, the
+  CA cosigner's role is authenticity; it never counts toward transparency-group
+  thresholds. Group evaluation counts distinct cosigners, so a duplicated
+  member can no longer satisfy a quorum alone.
+- **Breaking:** trust-store construction errors are `Error::Configuration`,
+  separated from `Error::Malformed`, which is for wire input only.
+- Added cargo-fuzz targets (`fuzz_verify`, `fuzz_parse`, `fuzz_policy`) over the
+  demo corpus seeds, run as a per-commit CI smoke test; the verification pipeline
+  is also swept for no-panic behavior on truncated and bit-flipped inputs.
+  `fuzz_policy` derives the entire relying-party configuration (cosigner groups
+  and thresholds, revocation ranges, trusted subtrees, timestamp) from the fuzz
+  input, covering policy corner cases that cannot be reached by mutating
+  certificates (signatures cannot be forged), and asserts verdict invariants
+  (validity, revocation, quorum satisfaction, corrupted-key accounting)
+  instead of only "no panic".
+
 ## 0.2.0
 
 - **Breaking:** `CaTrust::required_cosigners` and `TrustStore::required_for_all`
