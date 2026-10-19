@@ -341,6 +341,63 @@ fn trust_store_and_cosignature_failures_are_distinguished() {
 }
 
 #[test]
+fn cosigner_lookup_resolves_per_ca_groups_before_global_groups() {
+    // An ID present in both a per-CA group and a global group resolves through
+    // the per-CA group first (verify.rs consults ca.cosigner(), which searches
+    // required_groups in insertion order, and only then required_for_all), so
+    // the per-CA key decides. fuzz_policy's oracle relies on this order.
+    let clean = cosigner(
+        "32473.2.1",
+        SignatureAlgorithm::EcdsaP256Sha256,
+        keys::C_32473_2_1,
+    );
+    let mut corrupted = clean.clone();
+    let last = corrupted.spki_der.len() - 1;
+    corrupted.spki_der[last] ^= 1; // Same length, wrong key material.
+
+    // Per-CA clean, global corrupted: the clean per-CA key wins.
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    ca.require_group(CosignerGroup::single(clean.clone()))
+        .unwrap();
+    let mut store = TrustStore::new();
+    store.add_ca(ca);
+    store.require_group_for_all(CosignerGroup::single(corrupted.clone()));
+    let verification = verify_certificate(&store, STANDALONE, NOW).unwrap();
+    assert!(verification.satisfied_cosigners.contains(&id("32473.2.1")));
+
+    // Per-CA corrupted, global clean: the corrupted per-CA key still wins, so
+    // the cosignature lands in `invalid`.
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    ca.require_group(CosignerGroup::single(corrupted.clone()))
+        .unwrap();
+    let mut store = TrustStore::new();
+    store.add_ca(ca);
+    store.require_group_for_all(CosignerGroup::single(clean));
+    let Err(Error::PolicyUnsatisfied { invalid, .. }) = verify_certificate(&store, STANDALONE, NOW)
+    else {
+        panic!("expected PolicyUnsatisfied")
+    };
+    assert_eq!(invalid, [id("32473.2.1")]);
+
+    // Within per-CA groups, insertion order decides: first group wins.
+    let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
+    ca.require_group(CosignerGroup::single(corrupted)).unwrap();
+    ca.require_group(CosignerGroup::single(cosigner(
+        "32473.2.1",
+        SignatureAlgorithm::EcdsaP256Sha256,
+        keys::C_32473_2_1,
+    )))
+    .unwrap();
+    let mut store = TrustStore::new();
+    store.add_ca(ca);
+    let Err(Error::PolicyUnsatisfied { invalid, .. }) = verify_certificate(&store, STANDALONE, NOW)
+    else {
+        panic!("expected PolicyUnsatisfied")
+    };
+    assert_eq!(invalid, [id("32473.2.1")]);
+}
+
+#[test]
 fn verification_exposes_the_subtree_and_its_hash() {
     let mut ca = CaTrust::from_ca_certificate(CA).unwrap();
     ca.trust_subtree(TrustedSubtree {

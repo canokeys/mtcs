@@ -97,12 +97,10 @@ fn cosigner(spec: &MemberSpec) -> CosignerInfo {
 fuzz_target!(|spec: Spec| {
     let mut ca = CaTrust::from_ca_certificate(CA).expect("fixture CA");
     let ca_id = ca.ca_id.clone();
-    // Ground truth for the verdict invariants below. first_key tracks lookup
-    // order: the CA cosigner is always clean (its key comes from the CA
-    // certificate), and per-CA groups are searched before global groups.
-    let mut first_key: Vec<(TrustAnchorId, bool)> = vec![(ca_id.clone(), false)];
-    let mut added_groups: Vec<CosignerGroup> = Vec::new();
-    let mut global_groups: Vec<CosignerGroup> = Vec::new();
+    // The per-member corrupt_key flags stay next to each pushed group so that
+    // first_key below can be rebuilt in the verifier's lookup order.
+    let mut added_groups: Vec<(CosignerGroup, Vec<bool>)> = Vec::new();
+    let mut global_groups: Vec<(CosignerGroup, Vec<bool>)> = Vec::new();
     let mut trusted_uncorrupted: Vec<(u16, u64, u64)> = Vec::new();
     let mut revoked_ranges: Vec<core::ops::RangeInclusive<u64>> = Vec::new();
     for group_spec in spec.groups.iter().take(8) {
@@ -119,17 +117,28 @@ fuzz_target!(|spec: Spec| {
         ) else {
             continue;
         };
+        let corrupted: Vec<bool> = members.iter().map(|(_, corrupted)| *corrupted).collect();
         if group_spec.global {
-            global_groups.push(group);
+            global_groups.push((group, corrupted));
         // CA-self rejection is coverage, not a failure of the fuzz run.
         } else if ca.require_group(group.clone()).is_ok() {
-            added_groups.push(group);
+            added_groups.push((group, corrupted));
         } else {
             continue;
         }
-        for (info, corrupted) in &members {
-            if !first_key.iter().any(|(id, _)| id == &info.id) {
-                first_key.push((info.id.clone(), *corrupted));
+    }
+    // Ground truth for the verdict invariants below, built only after both
+    // group lists are final. first_key mirrors the verifier's lookup order in
+    // verify.rs: the CA cosigner (always clean; its key comes from the CA
+    // certificate), then per-CA groups in insertion order, then global groups.
+    // For an ID present in several groups, the first entry is the key the
+    // verifier uses; building this in spec order instead would misattribute
+    // keys for IDs shared across per-CA and global groups.
+    let mut first_key: Vec<(TrustAnchorId, bool)> = vec![(ca_id.clone(), false)];
+    for (group, corrupted) in added_groups.iter().chain(&global_groups) {
+        for (member, corrupted) in group.members().iter().zip(corrupted) {
+            if !first_key.iter().any(|(id, _)| id == &member.id) {
+                first_key.push((member.id.clone(), *corrupted));
             }
         }
     }
@@ -158,10 +167,14 @@ fuzz_target!(|spec: Spec| {
     }
     let mut store = TrustStore::new();
     store.add_ca(ca);
-    for group in global_groups.iter().cloned() {
-        store.require_group_for_all(group);
+    for (group, _) in &global_groups {
+        store.require_group_for_all(group.clone());
     }
-    let all_groups: Vec<_> = added_groups.into_iter().chain(global_groups).collect();
+    let all_groups: Vec<_> = added_groups
+        .iter()
+        .chain(&global_groups)
+        .map(|(group, _)| group)
+        .collect();
     let cert = CERTS[(spec.cert % CERTS.len() as u8) as usize];
     let now = NOW_BASE + (spec.now.unsigned_abs() % (4 * 365 * 86400)) as i64;
     match verify_certificate(&store, cert, now) {
